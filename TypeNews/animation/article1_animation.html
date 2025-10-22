@@ -1,0 +1,102 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Newsletter - KYOCERA Document Solutions</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .newsletter-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #fff;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        table, th, td {
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+        }
+        .newsletter-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+        }
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .gallery-item {
+            position: relative;
+            overflow: hidden;
+            border-radius: 5px;
+        }
+        .gallery-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+        .gallery-item:hover img {
+            transform: scale(1.05);
+        }
+        .two-column-layout {
+            display: flex;
+            gap: 20px;
+        }
+        .column {
+            flex: 1;
+        }
+        @media (max-width: 768px) {
+            .two-column-layout {
+                flex-direction: column;
+            }
+        }
+        /* Ensure images maintain their aspect ratio */
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+        /* Make sure tables are responsive */
+        table {
+            width: 100% !important;
+            max-width: 100%;
+            table-layout: fixed;
+        }
+    </style>
+</head>
+<body>
+    <div class="newsletter-container">
+        <div class="newsletter-section two-column-layout syc-item" style="display: flex; gap: 20px; margin: 30px 0px; padding: 20px; border-radius: 8px;">
+            <div class="column" style="background-image: initial; background-position: initial; background-size: initial; background-repeat: initial; background-attachment: initial; background-origin: initial; background-clip: initial; flex: 1 1 0%; padding: 20px; border-radius: 8px; box-shadow: rgba(0, 0, 0, 0.05) 0px 2px 4px;">
+                <div data-cleared="1" style=""><p style="text-align: center;"><span style="font-size: 52px; line-height: 1.2; font-weight: bold;"><br></span></p><p style="text-align: center;"><span style="font-size: 52px; line-height: 1.2; font-weight: bold;"><br></span></p><p style="text-align: center;"><span style="font-size: 52px; line-height: 1.2; font-weight: bold;">Article animation 1</span></p><p style="text-align: center; background-color: white;"><br></p><p style="text-align: center; background-color: white;"><span style="font-size: 22px;"><span style="font-size: 22px;">Test AA1</span></span></p></div>
+            </div>
+            <div class="column" style="background: white; flex: 1 1 0%; padding: 20px; border-radius: 8px; box-shadow: rgba(0, 0, 0, 0.05) 0px 2px 4px;">
+                <div class="image-wrapper" style="position: relative; display: inline-block; margin: 10px 0px;"><img src="Image/animation/article1_animation.png" alt="page1.png" style="width: auto; height: auto; border-radius: 8px; display: block; transform: none;" class="" data-original-src="Image/animation/article1_animation.png"></div>
+            </div>
+        </div><p><br></p>
+    </div>
+</body>
+</html>

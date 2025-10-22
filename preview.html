@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Comptez sur nous — Juin 2025</title>
+    <link rel="stylesheet" href="styles.css?v=20250922-1" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="icon" type="image/png" href="Image/header_footer/logo.png" />
+    
+</head>
+<body>
+    <!-- Header (same design as index.html) -->
+    <header class="kyocera-header">
+        <!-- Desktop Header -->
+        <div class="header-top desktop-header">
+            <div class="header-logo">
+                <a href="https://www.kyoceradocumentsolutions.fr/fr.html">
+                    <img src="Image/header_footer/logo.png" />
+                </a>
+                <span class="header-logo-text">KYOCERA Document Solutions</span>
+            </div>
+            <div class="header-lang-account">
+                <a href="https://www.kyoceradocumentsolutions.fr/fr/about-us/contact-us/kyocera-worldwide.html" class="lang-text">
+                    <img src="Image/header_footer/fr.svg" alt="France" class="flag-icon" />
+                    FR France
+                </a>
+                <a href="https://mykyocera.kyoceradocumentsolutions.fr/fr.html" class="account-text">My Kyocera</a>
+            </div>
+        </div>
+
+        <!-- Mobile Header -->
+        <div class="mobile-header">
+            <div class="mobile-header-top">
+                <div class="header-logo">
+                    <a href="https://www.kyoceradocumentsolutions.fr/fr.html">
+                        <img src="Image/header_footer/logo.png" />
+                    </a>
+                    <span class="header-logo-text">KYOCERA Document Solutions</span>
+                </div>
+            </div>
+            <div class="mobile-header-bottom">
+                <a href="https://www.kyoceradocumentsolutions.fr/fr/about-us/contact-us/kyocera-worldwide.html" class="mobile-lang-text">
+                    <i class="fas fa-globe"></i>
+                    FR / France
+                </a>
+                <div class="mobile-icons-group">
+                    <a href="https://mykyocera.kyoceradocumentsolutions.fr/fr.html">
+                        <img src="Image/header_footer/mykyocer.svg" alt="My Kyocera" class="mobile-user-icon" />
+                    </a>
+                    <button class="hamburger mobile-hamburger" id="hamburger">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <nav class="header-nav" id="headerNav">
+            <ul class="nav-menu">
+                <li><a href="https://www.kyoceradocumentsolutions.fr/fr/smarter-workspaces.html">Espaces de travail intelligents</a></li>
+                <li><a href="https://www.kyoceradocumentsolutions.fr/fr/content-services.html">Business Solutions</a></li>
+                <li><a href="https://www.kyoceradocumentsolutions.fr/fr/products.html">Produits</a></li>
+                <li><a href="https://www.kyoceradocumentsolutions.fr/fr/support.html">Support</a></li>
+                <li><a href="https://www.kyoceradocumentsolutions.fr/fr/about-us.html">Qui sommes-nous</a></li>
+            </ul>
+        </nav>
+
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <div class="content-wrapper">
+            <div class="content-area">
+                <div class="content-loader" style="background:#f8f9fa; padding:16px; border-radius:8px;">
+                    <label for="contentSelect" style="font-weight:600; margin-right:8px;">Choisir un contenu:</label>
+                    <select id="contentSelect" class="kyo-select" style="padding:8px 12px; border:1px solid #ccc; border-radius:6px;">
+                        <option value="" selected>-- Sélectionnez --</option>
+                        <option value="teteSuperieure.html">Tête supérieure</option>
+                    </select>
+                    <span id="contentStatus" style="margin-left:10px; color:#666; font-size:0.95rem;"></span>
+                </div>
+                <div id="loadedContent" class="loaded-content" style="margin-top:20px;"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer (same design as index.html) -->
+    <footer class="kyocera-footer">
+        <div class="footer-content">
+            <div class="footer-main desktop-footer">
+                <div class="footer-row footer-row-1">
+                    <div class="footer-social-icons">
+                        <a href="https://www.facebook.com/KyoceraDocumentSolutionsFrance/"><img src="Image/header_footer/facebook.png" alt="Facebook" /></a>
+                        <a href="https://www.linkedin.com/company/kyocera-document-solutions-france/posts/?feedView=all"><img src="Image/header_footer/linkin.png" alt="LinkedIn" /></a>
+                        <a href="https://www.youtube.com/user/kdfrsas"><img src="Image/header_footer/video.png" alt="YouTube" /></a>
+                    </div>
+                </div>
+                <div class="footer-row footer-row-2">
+                    <div class="footer-left">
+                        <div class="footer-links">
+                            <a href="https://www.kyoceradocumentsolutions.fr/fr/about-us/contact-us.html">Nous contacter</a>
+                            <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/privacy-and-cookie-centre.html">Utilisation des cookies</a>
+                            <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/data-request.html">Politique de gestion des données personnelles</a>
+                        </div>
+                    </div>
+                    <div class="footer-right">
+                        <div class="footer-copyright">©2025 KYOCERA Document Solutions France S.A.S.</div>
+                    </div>
+                </div>
+                <div class="footer-row footer-row-3">
+                    <div class="footer-left">
+                        <div class="footer-links">
+                            <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/terms-of-use.html">Conditions d'utilisation et restrictions légales</a>
+                            <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/legal-notices.html">Conditions Générales de Vente</a>
+                            <a href="https://www.kyoceradocumentsolutions.fr/fr/gdpr-preferences.html">Gérer vos cookies</a>
+                            <a href="https://www.kyoceradocumentsolutions.fr/fr/about-us/contact-us/press.html">Presse</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-main mobile-footer">
+                <div class="mobile-footer-social">
+                    <a href="https://www.facebook.com/kyoceradocumentsolutions"><img src="Image/header_footer/facebook.png" alt="Facebook" /></a>
+                    <a href="https://www.linkedin.com/company/kyocera-document-solutions"><img src="Image/header_footer/linkin.png" alt="LinkedIn" /></a>
+                    <a href="https://www.youtube.com/user/kyoceradocumentsolutions"><img src="Image/header_footer/video.png" alt="YouTube" /></a>
+                </div>
+                <div class="mobile-footer-links">
+                    <a href="https://www.kyoceradocumentsolutions.fr/fr/about-us/contact-us.html">Nous contacter</a>
+                    <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/privacy-and-cookie-centre.html">Utilisation des cookies</a>
+                    <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/data-request.html">Politique de gestion des données personnelles</a>
+                    <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/terms-of-use.html">Conditions d'utilisation et restrictions légales</a>
+                    <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/legal-notices.html">Conditions Générales de Vente</a>
+                    <a href="https://www.kyoceradocumentsolutions.fr/fr/gdpr-preferences.html">Gérer vos cookies</a>
+                    <a href="https://www.kyoceradocumentsolutions.fr/fr/about-us/contact-us/press.html">Presse</a>
+                </div>
+                <div class="mobile-footer-copyright">©2025 KYOCERA Document Solutions France S.A.S.</div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="preview.js"></script>
+</body>
+</html>
