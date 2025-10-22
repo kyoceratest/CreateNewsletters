@@ -546,6 +546,26 @@ body {
     z-index: 900;
 }
 
+/* Ensure editable canvas is visible beside the fixed sidebar and below fixed header (editor view) */
+.newsletter-editor .main-content {
+    /* Leave room for the fixed left sidebar */
+    margin-left: 240px;
+    /* Leave room for the fixed header */
+    padding-top: 90px;
+    /* Create a scrollable canvas area */
+    height: calc(100vh - 90px);
+    overflow: auto;
+}
+
+.newsletter-editor .content-wrapper {
+    height: 100%;
+}
+
+.newsletter-editor .editable-content {
+    min-height: calc(100vh - 120px);
+    background: #ffffff;
+}
+
 .tool-section h3 {
     font-size: 18px;
     margin-bottom: 20px;

@@ -1,16 +1,30 @@
 <!DOCTYPE html>
 <html lang="fr">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Newsletter - KYOCERA Document Solutions</title>
-        <link rel="stylesheet" href="styles.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-        <link rel="icon" type="image/png" href="Image/header_footer/logo.png" />
-        <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    </head>
-<body class="newsletter-editor">
-    <header class="kyocera-header">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirection…</title>
+    <meta http-equiv="refresh" content="0; url=index.html">
+    <link rel="canonical" href="index.html">
+    <script>window.location.replace('index.html');</script>
+    <style>
+      html,body{height:100%}
+      body{display:flex;align-items:center;justify-content:center;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#0e1420;background:#fafafa}
+      .box{padding:24px;border:1px solid rgba(0,0,0,0.08);border-radius:12px;background:white;box-shadow:0 10px 30px rgba(0,0,0,0.08);text-align:center}
+      a{color:#e2001a;text-decoration:none;font-weight:600}
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <p>Redirection vers l'éditeur…</p>
+      <p><a href="index.html">Ouvrir l'éditeur maintenant</a></p>
+    </div>
+    <noscript>
+      <meta http-equiv="refresh" content="0; url=index.html">
+      <p><a href="index.html">Aller à l'éditeur</a></p>
+    </noscript>
+  </body>
+</html>
         <div class="header-top desktop-header">
             <div class="header-logo">
                 <a href="https://www.kyoceradocumentsolutions.fr/fr.html">
@@ -24,9 +38,14 @@
                     FR France
                 </a>
                 <a href="https://mykyocera.kyoceradocumentsolutions.fr/fr.html" class="account-text">My Kyocera</a>
+                
+                
             </div>
         </div>
+        
+        <!-- Mobile Header -->
         <div class="mobile-header">
+            <!-- Top row: Logo and company name -->
             <div class="mobile-header-top">
                 <div class="header-logo">
                     <a href="https://www.kyoceradocumentsolutions.fr/fr.html">
@@ -35,6 +54,7 @@
                     <span class="header-logo-text">KYOCERA Document Solutions</span>
                 </div>
         </div>
+            <!-- Bottom row: Language, icons, and hamburger -->
             <div class="mobile-header-bottom">
                 <a href="https://www.kyoceradocumentsolutions.fr/fr/about-us/contact-us/kyocera-worldwide.html" class="mobile-lang-text">
                     <i class="fas fa-globe"></i>
@@ -54,11 +74,16 @@
         </div>
     </header>
 
+    <!-- Main Content Wrapper -->
     <div class="main-content-wrapper" style="display: flex; flex: 1; position: relative; overflow: hidden; height: calc(100vh - 60px);">
+    <!-- Sidebar Overlay -->
     <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- Editing Tools Sidebar -->
     <div class="editor-sidebar">
         <div class="tool-section">
             <h3>Outils d'édition</h3>
+            <!-- Insert Image -->
             <div class="tool-group">
                 <button class="tool-btn" id="insertImageBtn">
                     <i class="fas fa-image"></i> Insérer Image
@@ -68,6 +93,8 @@
                     <button class="option-btn" id="urlImageBtn">Image URL</button>
                         </div>
                     </div>
+
+            <!-- Insert Video -->
             <div class="tool-group">
                 <button class="tool-btn" id="insertVideoBtn">
                     <i class="fas fa-video"></i> Insérer Vidéo
@@ -84,9 +111,13 @@
                     </button>
         </div>
             </div>
+
+            <!-- Insert Table -->
             <button class="tool-btn" id="insertTableBtn">
                 <i class="fas fa-table"></i> Insérer Tableau
             </button>
+
+            <!-- Insert Section -->
             <div class="tool-group">
                 <button class="tool-btn" id="insertSectionBtn">
                     <i class="fas fa-th-large"></i> Insérer Section
@@ -112,6 +143,7 @@
                     </button>
                 </div>
             </div>
+            <!-- Importer -->
             <div class="tool-group">
                 <button class="tool-btn" id="importBtn">
                     <i class="fas fa-file-import"></i> Importer
@@ -121,6 +153,7 @@
                     <button class="option-btn" id="importExcelBtn"><i class="fas fa-file-excel"></i> Importer Excel</button>
                 </div>
             </div>
+            <!-- Actions -->
             <div class="tool-group">
                 <button class="tool-btn action-btn" id="undoBtn">
                     <i class="fas fa-undo"></i> Annuler
@@ -132,6 +165,8 @@
                     <i class="fas fa-trash"></i> Nettoyer
                         </button>
                     </div>
+
+            <!-- Save and History -->
             <div class="tool-group">
                 <button class="tool-btn save-btn" id="saveBtn">
                     <i class="fas fa-save"></i> Enregistrer
@@ -146,18 +181,14 @@
         </div>
     </div>
 
-    <!-- Main editable area (must be sibling of editor-sidebar inside main-content-wrapper) -->
-    <main class="main-content">
-      <div class="content-wrapper" style="position: relative; height: 100%;">
-        <div class="editable-content" id="editableContent" contenteditable="true" style="height: 100%; overflow-y: auto;"></div>
-      </div>
-    </main>
-
+    <!-- Rich Text Editing Toolbar (floating) -->
     <div class="rich-text-toolbar" id="richTextToolbar" style="display: none;">
         <div class="toolbar-section">
+            <!-- Font controls -->
             <select id="fontFamily" class="toolbar-select">
                 <option value="Verdana">Verdana</option>
             </select>
+
             <select id="fontSize" class="toolbar-select">
                 <option value="52">Sujette </option>
                 <option value="22">Résumé </option>
@@ -175,15 +206,20 @@
                 <option value="2.0">2.0</option>
             </select>
     </div>
+
         <div class="toolbar-divider"></div>
         <div class="toolbar-section">
+            <!-- Text formatting -->
             <button class="toolbar-btn" id="boldBtn" title="Gras"><i class="fas fa-bold"></i></button>
             <button class="toolbar-btn" id="italicBtn" title="Italique"><i class="fas fa-italic"></i></button>
             <button class="toolbar-btn" id="underlineBtn" title="Souligné"><i class="fas fa-underline"></i></button>
             <button class="toolbar-btn" id="strikeBtn" title="Barré"><i class="fas fa-strikethrough"></i></button>
                     </div>
+
         <div class="toolbar-divider"></div>
+
         <div class="toolbar-section">
+            <!-- Colors -->
             <div class="dropdown">
                 <button class="toolbar-btn" id="textColorDropdownBtn" title="Couleur du texte">
                     <i class="fas fa-font" style="color: black;"></i>
@@ -201,26 +237,32 @@
                     </div>
                     <div class="palette-heading">Couleurs du thème</div>
                     <div class="color-palette" id="textColorPalette">
+                        <!-- Grey -->
                         <div class="palette-color" style="background-color: #585858;" data-color="#585858"></div>
                         <div class="palette-color" style="background-color: #7E7E7E;" data-color="#7E7E7E"></div>
                         <div class="palette-color" style="background-color: #A9A9A9;" data-color="#A9A9A9"></div>
                         <div class="palette-color" style="background-color: #D4D4D4;" data-color="#D4D4D4"></div>
+                        <!-- Purple -->
                         <div class="palette-color" style="background-color: #925ED2;" data-color="#925ED2"></div>
                         <div class="palette-color" style="background-color: #AE87DE;" data-color="#AE87DE"></div>
                         <div class="palette-color" style="background-color: #C9AFE9;" data-color="#C9AFE9"></div>
                         <div class="palette-color" style="background-color: #E4D7F4;" data-color="#E4D7F4"></div>
+                        <!-- Blue -->
                         <div class="palette-color" style="background-color: #00B1DB;" data-color="#00B1DB"></div>
                         <div class="palette-color" style="background-color: #4AC5E5;" data-color="#4AC5E5"></div>
                         <div class="palette-color" style="background-color: #8DD9EE;" data-color="#8DD9EE"></div>
                         <div class="palette-color" style="background-color: #C7ECF6;" data-color="#C7ECF6"></div>
+                        <!-- Yellow -->
                         <div class="palette-color" style="background-color: #FFC200;" data-color="#FFC200"></div>
                         <div class="palette-color" style="background-color: #FFD14E;" data-color="#FFD14E"></div>
                         <div class="palette-color" style="background-color: #FFE18E;" data-color="#FFE18E"></div>
                         <div class="palette-color" style="background-color: #FFF0C8;" data-color="#FFF0C8"></div>
+                        <!-- Orange -->
                         <div class="palette-color" style="background-color: #FF7C03;" data-color="#FF7C03"></div>
                         <div class="palette-color" style="background-color: #FF9E59;" data-color="#FF9E59"></div>
                         <div class="palette-color" style="background-color: #FFBF92;" data-color="#FFBF92"></div>
                         <div class="palette-color" style="background-color: #FFDFC9;" data-color="#FFDFC9"></div>
+                        <!-- Green -->
                         <div class="palette-color" style="background-color: #00C58D;" data-color="#00C58D"></div>
                         <div class="palette-color" style="background-color: #2FD3AB;" data-color="#2FD3AB"></div>
                         <div class="palette-color" style="background-color: #84E3C7;" data-color="#84E3C7"></div>
@@ -245,26 +287,32 @@
                     </div>
                     <div class="palette-heading">Couleurs du thème</div>
                     <div class="color-palette" id="bgColorPalette">
+                        <!-- Grey -->
                         <div class="palette-color" style="background-color: #585858;" data-color="#585858"></div>
                         <div class="palette-color" style="background-color: #7E7E7E;" data-color="#7E7E7E"></div>
                         <div class="palette-color" style="background-color: #A9A9A9;" data-color="#A9A9A9"></div>
                         <div class="palette-color" style="background-color: #D4D4D4;" data-color="#D4D4D4"></div>
+                        <!-- Purple -->
                         <div class="palette-color" style="background-color: #925ED2;" data-color="#925ED2"></div>
                         <div class="palette-color" style="background-color: #AE87DE;" data-color="#AE87DE"></div>
                         <div class="palette-color" style="background-color: #C9AFE9;" data-color="#C9AFE9"></div>
                         <div class="palette-color" style="background-color: #E4D7F4;" data-color="#E4D7F4"></div>
+                        <!-- Blue -->
                         <div class="palette-color" style="background-color: #00B1DB;" data-color="#00B1DB"></div>
                         <div class="palette-color" style="background-color: #4AC5E5;" data-color="#4AC5E5"></div>
                         <div class="palette-color" style="background-color: #8DD9EE;" data-color="#8DD9EE"></div>
                         <div class="palette-color" style="background-color: #C7ECF6;" data-color="#C7ECF6"></div>
+                        <!-- Yellow -->
                         <div class="palette-color" style="background-color: #FFC200;" data-color="#FFC200"></div>
                         <div class="palette-color" style="background-color: #FFD14E;" data-color="#FFD14E"></div>
                         <div class="palette-color" style="background-color: #FFE18E;" data-color="#FFE18E"></div>
                         <div class="palette-color" style="background-color: #FFF0C8;" data-color="#FFF0C8"></div>
+                        <!-- Orange -->
                         <div class="palette-color" style="background-color: #FF7C03;" data-color="#FF7C03"></div>
                         <div class="palette-color" style="background-color: #FF9E59;" data-color="#FF9E59"></div>
                         <div class="palette-color" style="background-color: #FFBF92;" data-color="#FFBF92"></div>
                         <div class="palette-color" style="background-color: #FFDFC9;" data-color="#FFDFC9"></div>
+                        <!-- Green -->
                         <div class="palette-color" style="background-color: #00C58D;" data-color="#00C58D"></div>
                         <div class="palette-color" style="background-color: #2FD3AB;" data-color="#2FD3AB"></div>
                         <div class="palette-color" style="background-color: #84E3C7;" data-color="#84E3C7"></div>
@@ -273,26 +321,37 @@
                 </div>
             </div>
         </div>
+
         <div class="toolbar-divider"></div>
+
         <div class="toolbar-section">
+            <!-- Alignment -->
             <button class="toolbar-btn" id="alignLeftBtn" title="Aligner à gauche"><i class="fas fa-align-left"></i></button>
             <button class="toolbar-btn" id="alignCenterBtn" title="Centrer"><i class="fas fa-align-center"></i></button>
             <button class="toolbar-btn" id="alignRightBtn" title="Aligner à droite"><i class="fas fa-align-right"></i></button>
             <button class="toolbar-btn" id="alignJustifyBtn" title="Justifier"><i class="fas fa-align-justify"></i></button>
                     </div>
+
         <div class="toolbar-divider"></div>
+
         <div class="toolbar-section">
+            <!-- Lists -->
             <button class="toolbar-btn" id="bulletListBtn" title="Liste à puces"><i class="fas fa-list-ul"></i></button>
             <button class="toolbar-btn" id="numberListBtn" title="Liste numérotée"><i class="fas fa-list-ol"></i></button>
             <button class="toolbar-btn" id="indentBtn" title="Augmenter le retrait"><i class="fas fa-indent"></i></button>
             <button class="toolbar-btn" id="outdentBtn" title="Diminuer le retrait"><i class="fas fa-outdent"></i></button>
                         </div>
+
         <div class="toolbar-divider"></div>
+
         <div class="toolbar-section">
+            <!-- Special actions -->
             <button class="toolbar-btn" id="linkBtn" title="Insérer lien"><i class="fas fa-link"></i></button>
             <button class="toolbar-btn" id="removeFormatBtn" title="Supprimer la mise en forme"><i class="fas fa-remove-format"></i></button>
                     </div>
                 </div>
+
+    <!-- Table Editing Toolbar (floating) -->
     <div class="table-toolbar" id="tableToolbar" style="display: none;">
         <div class="table-tools">
             <button class="table-tool" id="insertRowBtn"><i class="fas fa-plus"></i> Ligne</button>
@@ -316,26 +375,32 @@
                     </div>
                     <div class="palette-heading">Couleurs du thème</div>
                     <div class="color-palette" id="tableBgColorPalette">
+                        <!-- Grey -->
                         <div class="palette-color" style="background-color: #585858;" data-color="#585858"></div>
                         <div class="palette-color" style="background-color: #7E7E7E;" data-color="#7E7E7E"></div>
                         <div class="palette-color" style="background-color: #A9A9A9;" data-color="#A9A9A9"></div>
                         <div class="palette-color" style="background-color: #D4D4D4;" data-color="#D4D4D4"></div>
+                        <!-- Purple -->
                         <div class="palette-color" style="background-color: #925ED2;" data-color="#925ED2"></div>
                         <div class="palette-color" style="background-color: #AE87DE;" data-color="#AE87DE"></div>
                         <div class="palette-color" style="background-color: #C9AFE9;" data-color="#C9AFE9"></div>
                         <div class="palette-color" style="background-color: #E4D7F4;" data-color="#E4D7F4"></div>
+                        <!-- Blue -->
                         <div class="palette-color" style="background-color: #00B1DB;" data-color="#00B1DB"></div>
                         <div class="palette-color" style="background-color: #4AC5E5;" data-color="#4AC5E5"></div>
                         <div class="palette-color" style="background-color: #8DD9EE;" data-color="#8DD9EE"></div>
                         <div class="palette-color" style="background-color: #C7ECF6;" data-color="#C7ECF6"></div>
+                        <!-- Yellow -->
                         <div class="palette-color" style="background-color: #FFC200;" data-color="#FFC200"></div>
                         <div class="palette-color" style="background-color: #FFD14E;" data-color="#FFD14E"></div>
                         <div class="palette-color" style="background-color: #FFE18E;" data-color="#FFE18E"></div>
                         <div class="palette-color" style="background-color: #FFF0C8;" data-color="#FFF0C8"></div>
+                        <!-- Orange -->
                         <div class="palette-color" style="background-color: #FF7C03;" data-color="#FF7C03"></div>
                         <div class="palette-color" style="background-color: #FF9E59;" data-color="#FF9E59"></div>
                         <div class="palette-color" style="background-color: #FFBF92;" data-color="#FFBF92"></div>
                         <div class="palette-color" style="background-color: #FFDFC9;" data-color="#FFDFC9"></div>
+                        <!-- Green -->
                         <div class="palette-color" style="background-color: #00C58D;" data-color="#00C58D"></div>
                         <div class="palette-color" style="background-color: #2FD3AB;" data-color="#2FD3AB"></div>
                         <div class="palette-color" style="background-color: #84E3C7;" data-color="#84E3C7"></div>
@@ -346,6 +411,8 @@
             <button class="table-tool" id="tablePropsBtn"><i class="fas fa-cog"></i> Propriétés</button>
             </div>
                 </div>
+
+    <!-- Image Editing Toolbar (floating) -->
     <div class="image-toolbar" id="imageToolbar" style="display: none;">
         <div class="image-tools">
             <div class="toolbar-section">
@@ -416,6 +483,8 @@
             </div>
         </div>
     </div>
+
+    <!-- Section Editing Toolbar (floating) -->
     <div class="section-toolbar" id="sectionToolbar" style="display: none;">
         <div class="section-tools">
             <button class="toolbar-btn" id="sectionMoveUpBtn" title="Déplacer vers le haut"><i class="fas fa-arrow-up"></i></button>
@@ -457,26 +526,32 @@
                     </div>
                     <div class="palette-heading">Couleurs du thème</div>
                     <div class="color-palette" id="sectionBgColorPalette">
+                        <!-- Grey -->
                         <div class="palette-color" style="background-color: #585858;" data-color="#585858"></div>
                         <div class="palette-color" style="background-color: #7E7E7E;" data-color="#7E7E7E"></div>
                         <div class="palette-color" style="background-color: #A9A9A9;" data-color="#A9A9A9"></div>
                         <div class="palette-color" style="background-color: #D4D4D4;" data-color="#D4D4D4"></div>
+                        <!-- Purple -->
                         <div class="palette-color" style="background-color: #925ED2;" data-color="#925ED2"></div>
                         <div class="palette-color" style="background-color: #AE87DE;" data-color="#AE87DE"></div>
                         <div class="palette-color" style="background-color: #C9AFE9;" data-color="#C9AFE9"></div>
                         <div class="palette-color" style="background-color: #E4D7F4;" data-color="#E4D7F4"></div>
+                        <!-- Blue -->
                         <div class="palette-color" style="background-color: #00B1DB;" data-color="#00B1DB"></div>
                         <div class="palette-color" style="background-color: #4AC5E5;" data-color="#4AC5E5"></div>
                         <div class="palette-color" style="background-color: #8DD9EE;" data-color="#8DD9EE"></div>
                         <div class="palette-color" style="background-color: #C7ECF6;" data-color="#C7ECF6"></div>
+                        <!-- Yellow -->
                         <div class="palette-color" style="background-color: #FFC200;" data-color="#FFC200"></div>
                         <div class="palette-color" style="background-color: #FFD14E;" data-color="#FFD14E"></div>
                         <div class="palette-color" style="background-color: #FFE18E;" data-color="#FFE18E"></div>
                         <div class="palette-color" style="background-color: #FFF0C8;" data-color="#FFF0C8"></div>
+                        <!-- Orange -->
                         <div class="palette-color" style="background-color: #FF7C03;" data-color="#FF7C03"></div>
                         <div class="palette-color" style="background-color: #FF9E59;" data-color="#FF9E59"></div>
                         <div class="palette-color" style="background-color: #FFBF92;" data-color="#FFBF92"></div>
                         <div class="palette-color" style="background-color: #FFDFC9;" data-color="#FFDFC9"></div>
+                        <!-- Green -->
                         <div class="palette-color" style="background-color: #00C58D;" data-color="#00C58D"></div>
                         <div class="palette-color" style="background-color: #2FD3AB;" data-color="#2FD3AB"></div>
                         <div class="palette-color" style="background-color: #84E3C7;" data-color="#84E3C7"></div>
@@ -484,240 +559,198 @@
                     </div>
                 </div>
             </div>
+            <div class="toolbar-divider"></div>
+            <button class="toolbar-btn" id="sectionDeleteBtn" title="Supprimer"><i class="fas fa-trash"></i></button>
         </div>
-        <script>
-          (function(){
-            const EDITABLE_ID = 'editable-area';
-            function blobFromUrl(url) {
-              return fetch(url).then(r => r.blob());
-            }
-            function resizeBlobIfNeeded(blob, mime) {
-              return (async () => {
-                try {
-                  if (!/image\//i.test(mime)) return blob;
-                  const img = await new Promise((res, rej) => {
-                    const i = new Image();
-                    i.onload = () => res(i);
-                    i.onerror = rej;
-                    i.src = URL.createObjectURL(blob);
-                  });
-                  const maxW = 1600;
-                  const maxH = 1600;
-                  let { width:w, height:h } = img;
-                  if (w <= maxW && h <= maxH) return blob;
-                  const ratio = Math.min(maxW / w, maxH / h);
-                  const canvas = document.createElement('canvas');
-                  canvas.width = Math.round(w * ratio);
-                  canvas.height = Math.round(h * ratio);
-                  const ctx = canvas.getContext('2d');
-                  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                  const outMime = /png/i.test(mime) ? 'image/png' : 'image/jpeg';
-                  const quality = /png/i.test(mime) ? 1.0 : 0.85;
-                  const dataUrl = canvas.toDataURL(outMime, quality);
-                  const bstr = atob(dataUrl.split(',')[1]);
-                  let n = bstr.length; const u8 = new Uint8Array(n);
-                  while(n--) u8[n] = bstr.charCodeAt(n);
-                  return new Blob([u8], { type: outMime });
-                } catch (_) {
-                  return blob;
-                }
-              })();
-            }
-            function sanitizeBaseName(name) {
-              try {
-                const base = (name || '').split(/[\\\/]/).pop() || 'image';
-                const noQuery = base.split('?')[0].split('#')[0];
-                const parts = noQuery.split('.');
-                const ext = parts.length > 1 ? ('.' + parts.pop()) : '';
-                const stem = parts.join('.') || 'image';
-                const safeStem = stem.replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 40) || 'image';
-                return safeStem + ext;
-              } catch { return 'image'; }
-            }
-            function extFromMime(mime) {
-              try {
-                if (!mime) return '.jpg';
-                if (/png/i.test(mime)) return '.png';
-                if (/webp/i.test(mime)) return '.webp';
-                return '.jpg';
-              } catch { return '.jpg'; }
-            }
-            async function uploadBlob(blob, suggestedName) {
-              const fn = sanitizeBaseName(suggestedName);
-              const fd = new FormData();
-              fd.append('image', blob, fn || 'image');
-              try { if (fn) fd.append('filename', fn); } catch (_) {}
-              try { fd.append('overwrite', '1'); } catch (_) {}
-              try {
-                const res = await fetch('upload_image.php', { method: 'POST', body: fd });
-                if (!res.ok) throw new Error('upload failed');
-                const data = await res.json();
-                if (!data || !data.success || !data.url) throw new Error('bad response');
-                return data.url;
-              } catch (e) {
-                return '';
-              }
-            }
-            function originalNameFromSrc(src) {
-              try {
-                if (!src) return '';
-                if (/^\s*Image\//i.test(src)) {
-                  const p = src.trim().split(/[?#]/)[0];
-                  return p.split('/').pop() || '';
-                }
-                if (/^https?:/i.test(src)) {
-                  const u = new URL(src);
-                  return (u.pathname.split('/').pop() || '').split('?')[0].split('#')[0];
-                }
-                return '';
-              } catch { return ''; }
-            }
-            async function processImgEl(img) {
-              try {
-                const src = img.getAttribute('src') || img.src || '';
-                if (!src) return;
-                if (/^\s*Image\//i.test(src)) return;
-                const isData = /^data:/i.test(src);
-                const isHttp = /^https?:/i.test(src);
-                const isBlob = /^blob:/i.test(src);
-                if (!isData && !isHttp && !isBlob) return;
-                const guessedName = isHttp ? src : (img.getAttribute('alt') || 'image');
-                let blob;
-                if (isData) {
-                  const m = src.match(/^data:([^;]+);base64,(.*)$/);
-                  if (!m) return;
-                  const mime = m[1];
-                  const b64 = m[2];
-                  const bin = atob(b64);
-                  const arr = new Uint8Array(bin.length);
-                  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-                  blob = new Blob([arr], { type: mime });
-                } else {
-                  try { blob = await blobFromUrl(src); } catch { return; }
-                }
-                const resized = await resizeBlobIfNeeded(blob, blob.type || '');
-                const preferName = originalNameFromSrc(src) || guessedName;
-                const savedUrl = await uploadBlob(resized, preferName);
-                if (savedUrl) {
-                  img.src = savedUrl;
-                  img.removeAttribute('srcset');
-                  img.removeAttribute('sizes');
-                }
-              } catch (_) { }
-            }
-            const editable = document.getElementById(EDITABLE_ID) || document.body;
-            const observer = new MutationObserver(muts => {
-              for (const m of muts) {
-                m.addedNodes && m.addedNodes.forEach(n => {
-                  if (n.nodeType === 1) {
-                    if (n.tagName === 'IMG') processImgEl(n);
-                    n.querySelectorAll && n.querySelectorAll('img').forEach(processImgEl);
-                  }
-                });
-              }
-            });
-            observer.observe(editable, { childList: true, subtree: true });
-            editable.addEventListener('paste', () => {
-              setTimeout(() => { editable.querySelectorAll('img').forEach(processImgEl); }, 0);
-            });
-            editable.addEventListener('drop', () => {
-              setTimeout(() => { editable.querySelectorAll('img').forEach(processImgEl); }, 0);
-            });
-            async function exportZip() {
-              const imgs = Array.from(document.querySelectorAll('#' + EDITABLE_ID + ' img'));
-              let updated = 0, unchanged = 0, failed = 0;
-              let counter = 1;
-              for (const img of imgs) {
-                try {
-                  const src = img.getAttribute('src') || '';
-                  if (!src) { unchanged++; continue; }
-                  let blob;
-                  if (/^data:/i.test(src)) {
-                    const m = src.match(/^data:([^;]+);base64,(.*)$/);
-                    if (!m) { unchanged++; continue; }
-                    const mime = m[1];
-                    const b64 = m[2];
-                    const bin = atob(b64);
-                    const arr = new Uint8Array(bin.length);
-                    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-                    blob = new Blob([arr], { type: mime });
-                  } else {
-                    try { blob = await blobFromUrl(src); } catch { failed++; continue; }
-                  }
-                  if (!blob) { failed++; continue; }
-                  const resized = await resizeBlobIfNeeded(blob, blob.type || '');
-                  const ext = extFromMime(resized.type || blob.type || '');
-                  let fname = originalNameFromSrc(src);
-                  if (!fname) {
-                    const guessedName = img.getAttribute('alt') || 'image';
-                    fname = sanitizeBaseName(guessedName) + '_' + String(counter).padStart(3, '0') + ext;
-                  } else {
-                    if (!/\.[A-Za-z0-9]+$/.test(fname)) fname = fname + ext;
-                  }
-                  const uploadedUrl = await uploadBlob(resized, fname);
-                  if (uploadedUrl) {
-                    img.src = uploadedUrl;
-                    img.removeAttribute('srcset');
-                    img.removeAttribute('sizes');
-                    updated++;
-                  } else {
-                    failed++;
-                  }
-                  counter++;
-                } catch (_) { failed++; }
-              }
-              alert(`Images traitées: ${updated} mise(s) à jour, ${unchanged} inchangée(s), ${failed} échec(s)`);
-            }
-            document.addEventListener('DOMContentLoaded', function () {
-              const btn = document.getElementById('exportZipBtn');
-              if (btn) btn.addEventListener('click', exportZip);
-            });
-          })();
-        </script>
-    </div>
     </div>
 
-    <!-- History Modal (inline) -->
-    <div id="historyModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); z-index: 10000; justify-content: center; align-items: center; padding: 20px; opacity: 0; transition: opacity 0.3s ease; pointer-events: none;">
-      <div class="history-modal" style="background: white; border-radius: 8px; width: 90%; max-width: 1000px; max-height: 90vh; display: flex; flex-direction: column; position: relative; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3); margin: 0; padding: 0; opacity: 0; transform: translateY(-20px); transition: opacity 0.3s ease, transform 0.3s ease; overflow: hidden;">
-        <div class="modal-header">
-          <h2 id="historyModalTitle">Historique des travaux</h2>
-          <div class="search-container">
-            <i class="fas fa-search search-icon"></i>
-            <input type="text" id="historySearch" placeholder="Rechercher..." class="search-input">
-          </div>
-          <button class="close" id="closeHistoryModal" aria-label="Fermer">&times;</button>
+    <!-- Video Editing Toolbar (floating) -->
+    <div class="video-toolbar" id="videoToolbar" style="display: none;">
+        <div class="video-tools">
+            <div class="toolbar-section">
+                <div class="dropdown">
+                    <button class="toolbar-btn" id="videoSizeBtn" title="Taille de la vidéo"><i class="fas fa-expand-arrows-alt"></i></button>
+                    <div class="dropdown-content" id="videoSizeOptions" style="display: none;">
+                        <button class="dropdown-item" data-size="25"><i class="fas fa-search-minus"></i> 25%</button>
+                        <button class="dropdown-item" data-size="33"><i class="fas fa-search-minus"></i> 33%</button>
+                        <button class="dropdown-item" data-size="50"><i class="fas fa-compress"></i> 50%</button>
+                        <button class="dropdown-item" data-size="66"><i class="fas fa-expand"></i> 66%</button>
+                        <button class="dropdown-item" data-size="75"><i class="fas fa-expand"></i> 75%</button>
+                        <button class="dropdown-item" data-size="100"><i class="fas fa-arrows-alt"></i> 100%</button>
+                        <button class="dropdown-item" data-size="auto"><i class="fas fa-ruler-horizontal"></i> Auto</button>
+                    </div>
+                </div>
+            </div>
+            <div class="toolbar-divider"></div>
+            <button class="toolbar-btn" id="videoAlignLeftBtn" title="Aligner à gauche"><i class="fas fa-align-left"></i></button>
+            <button class="toolbar-btn" id="videoAlignCenterBtn" title="Centrer"><i class="fas fa-align-center"></i></button>
+            <button class="toolbar-btn" id="videoAlignRightBtn" title="Aligner à droite"><i class="fas fa-align-right"></i></button>
+            <div class="toolbar-divider"></div>
+            <button class="toolbar-btn" id="videoDeleteBtn" title="Supprimer"><i class="fas fa-trash"></i></button>
         </div>
-        <div class="history-list-container" style="flex: 1; overflow-y: auto; padding: 0 20px 20px;">
-          <div class="history-list" id="historyList" role="listbox" aria-multiselectable="true" style="margin: 0; padding: 0; list-style: none;"></div>
-        </div>
-        <div class="modal-footer">
-          <div class="selection-info" id="selectionInfo">
-            <span id="selectedCount">0</span> élément(s) sélectionné(s)
-          </div>
-          <div class="action-buttons">
-            <button class="btn btn-primary" id="saveSnapshotBtn">Sauvegarder l'instantané</button>
-            <button class="btn btn-outline" id="selectAllFooterBtn">Tout sélectionner</button>
-            <button class="btn btn-outline" id="deselectAllFooterBtn">Tout désélectionner</button>
-            <button class="btn btn-outline" id="cancelHistoryBtn">Annuler</button>
-            <button class="btn btn-primary" id="previewHistoryBtn">Aperçu</button>
-            <button class="btn btn-danger" id="deleteHistoryBtn">Supprimer</button>
-          </div>
-        </div>
-      </div>
     </div>
 
-    <!-- Editor initialization flags (from original editor page) -->
+    <!-- Webinar Editing Toolbar (floating) -->
+    <div class="webinar-toolbar" id="webinarToolbar" style="display: none;">
+        <div class="webinar-tools">
+            <div class="toolbar-section">
+                <div class="dropdown">
+                    <button class="toolbar-btn" id="webinarBgColorDropdownBtn" title="Couleur de fond">
+                        <i class="fas fa-fill-drip" style="background-color: #a9a9a9;"></i>
+                    </button>
+                    <div class="dropdown-content color-dropdown" id="webinarBgColorDropdownContent" style="display: none;">
+                        <div class="palette-heading">Couleurs principales</div>
+                        <div class="color-palette primary" id="webinarBgPrimaryPalette">
+                            <div class="palette-color" style="background-color: #000000;" data-color="#000000"></div>
+                            <div class="palette-color" style="background-color: #FFFFFF;" data-color="#FFFFFF"></div>
+                            <div class="palette-color" style="background-color: #6E3CBE;" data-color="#6E3CBE"></div>
+                            <div class="palette-color" style="background-color: #0A9BCD;" data-color="#0A9BCD"></div>
+                            <div class="palette-color" style="background-color: #F5B400;" data-color="#F5B400"></div>
+                            <div class="palette-color" style="background-color: #F06400;" data-color="#F06400"></div>
+                            <div class="palette-color" style="background-color: #00B176;" data-color="#00B176"></div>
+                        </div>
+                        <div class="palette-heading">Couleurs du thème</div>
+                        <div class="color-palette" id="webinarBgColorPalette">
+                            <!-- Grey -->
+                            <div class="palette-color" style="background-color: #585858;" data-color="#585858"></div>
+                            <div class="palette-color" style="background-color: #7E7E7E;" data-color="#7E7E7E"></div>
+                            <div class="palette-color" style="background-color: #A9A9A9;" data-color="#A9A9A9"></div>
+                            <div class="palette-color" style="background-color: #D4D4D4;" data-color="#D4D4D4"></div>
+                            <!-- Purple -->
+                            <div class="palette-color" style="background-color: #925ED2;" data-color="#925ED2"></div>
+                            <div class="palette-color" style="background-color: #AE87DE;" data-color="#AE87DE"></div>
+                            <div class="palette-color" style="background-color: #C9AFE9;" data-color="#C9AFE9"></div>
+                            <div class="palette-color" style="background-color: #E4D7F4;" data-color="#E4D7F4"></div>
+                            <!-- Blue -->
+                            <div class="palette-color" style="background-color: #00B1DB;" data-color="#00B1DB"></div>
+                            <div class="palette-color" style="background-color: #4AC5E5;" data-color="#4AC5E5"></div>
+                            <div class="palette-color" style="background-color: #8DD9EE;" data-color="#8DD9EE"></div>
+                            <div class="palette-color" style="background-color: #C7ECF6;" data-color="#C7ECF6"></div>
+                            <!-- Yellow -->
+                            <div class="palette-color" style="background-color: #FFC200;" data-color="#FFC200"></div>
+                            <div class="palette-color" style="background-color: #FFD14E;" data-color="#FFD14E"></div>
+                            <div class="palette-color" style="background-color: #FFE18E;" data-color="#FFE18E"></div>
+                            <div class="palette-color" style="background-color: #FFF0C8;" data-color="#FFF0C8"></div>
+                            <!-- Orange -->
+                            <div class="palette-color" style="background-color: #FF7C03;" data-color="#FF7C03"></div>
+                            <div class="palette-color" style="background-color: #FF9E59;" data-color="#FF9E59"></div>
+                            <div class="palette-color" style="background-color: #FFBF92;" data-color="#FFBF92"></div>
+                            <div class="palette-color" style="background-color: #FFDFC9;" data-color="#FFDFC9"></div>
+                            <!-- Green -->
+                            <div class="palette-color" style="background-color: #00C58D;" data-color="#00C58D"></div>
+                            <div class="palette-color" style="background-color: #2FD3AB;" data-color="#2FD3AB"></div>
+                            <div class="palette-color" style="background-color: #84E3C7;" data-color="#84E3C7"></div>
+                            <div class="palette-color" style="background-color: #C4F0E3;" data-color="#C4F0E3"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="toolbar-divider"></div>
+            <div class="toolbar-section">
+                <button class="toolbar-btn" id="webinarInsertImageBtn" title="Insérer une image">
+                    <i class="fas fa-image"></i>
+                </button>
+                <input type="file" id="webinarImageInput" accept="image/*" style="display:none;">
+            </div>
+            <div class="toolbar-divider"></div>
+            <div class="toolbar-section">
+                <button class="toolbar-btn" id="webinarInsertVideoUrlBtn" title="Insérer vidéo URL">
+                    <i class="fas fa-link"></i>
+                </button>
+                <button class="toolbar-btn" id="webinarInsertVideoLocalBtn" title="Insérer vidéo locale">
+                    <i class="fas fa-file-video"></i>
+                </button>
+                <input type="file" id="webinarVideoInput" accept="video/*" style="display:none;">
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <div class="content-wrapper" style="position: relative; height: 100%;">
+            <!-- Editable Content Area -->
+            <div class="editable-content" id="editableContent" contenteditable="true" style="height: 100%; overflow-y: auto;">
+                <!-- Gallery Section -->
+                <div class="newsletter-section gallery-section" style="margin: 20px 20px; max-width: calc(100% - 40px); background-color: #f9f9f9; border-radius: 8px; padding: 20px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);">
+                    <div class="gallery-container" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; align-items: center;">
+                        <div class="gallery-item" style="text-align: center; padding: 10px; background: white; border-radius: 6px; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);">
+                            <img src="Image/placeholder.svg" alt="Gallery Image 1" style="width: 100%; height: 150px; object-fit: cover; border-radius: 4px;">
+                            <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">Image 1</p>
+                        </div>
+                        <div class="gallery-item" style="text-align: center; padding: 10px; background: white; border-radius: 6px; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);">
+                            <img src="Image/placeholder.svg" alt="Gallery Image 2" style="width: 100%; height: 150px; object-fit: cover; border-radius: 4px;">
+                            <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">Image 2</p>
+                        </div>
+                        <div class="gallery-item" style="text-align: center; padding: 10px; background: white; border-radius: 6px; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);">
+                            <img src="Image/placeholder.svg" alt="Gallery Image 3" style="width: 100%; height: 150px; object-fit: cover; border-radius: 4px;">
+                            <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">Image 3</p>
+                        </div>
+                        <div class="gallery-item" style="text-align: center; padding: 10px; background: white; border-radius: 6px; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);">
+                            <img src="Image/placeholder.svg" alt="Gallery Image 4" style="width: 100%; height: 150px; object-fit: cover; border-radius: 4px;">
+                            <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">Image 4</p>
+                        </div>
+                        <div class="gallery-item" style="text-align: center; padding: 10px; background: white; border-radius: 6px; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);">
+                            <img src="Image/placeholder.svg" alt="Gallery Image 5" style="width: 100%; height: 150px; object-fit: cover; border-radius: 4px;">
+                            <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">Image 5</p>
+                        </div>
+                        <div class="gallery-item" style="text-align: center; padding: 10px; background: white; border-radius: 6px; box-shadow: 0 1px 5px rgba(0, 0, 0, 0.1);">
+                            <img src="Image/placeholder.svg" alt="Gallery Image 6" style="width: 100%; height: 150px; object-fit: cover; border-radius: 4px;">
+                            <p style="margin: 10px 0 0 0; font-size: 14px; color: #666;">Image 6</p>
+                        </div>
+                    </div>
+                    <div class="gallery-controls" style="text-align: center; margin-top: 20px;">
+                        <button class="gallery-btn" style="background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 0 5px;">Ajouter une image</button>
+                        <button class="gallery-btn" style="background-color: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 0 5px;">Modifier la galerie</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- History Modal -->
+            <div id="historyModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-color: rgba(0, 0, 0, 0.7); z-index: 10000; justify-content: center; align-items: center; padding: 20px; opacity: 0; transition: opacity 0.3s ease; pointer-events: none;">
+                <div class="history-modal" style="background: white; border-radius: 8px; width: 90%; max-width: 1000px; max-height: 90vh; display: flex; flex-direction: column; position: relative; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3); margin: 0; padding: 0; opacity: 0; transform: translateY(-20px); transition: opacity 0.3s ease, transform 0.3s ease; overflow: hidden;">
+            <div class="modal-header">
+                <h2 id="historyModalTitle">Historique des travaux</h2>
+                <div class="search-container">
+                    <i class="fas fa-search search-icon"></i>
+                    <input type="text" id="historySearch" placeholder="Rechercher..." class="search-input">
+                </div>
+                <button class="close" id="closeHistoryModal" aria-label="Fermer">&times;</button>
+            </div>
+            <div class="history-list-container" style="flex: 1; overflow-y: auto; padding: 0 20px 20px;">
+                <div class="history-list" id="historyList" role="listbox" aria-multiselectable="true" style="margin: 0; padding: 0; list-style: none;">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="selection-info" id="selectionInfo">
+                    <span id="selectedCount">0</span> élément(s) sélectionné(s)
+                </div>
+                <div class="action-buttons">
+                    <button class="btn btn-primary" id="saveSnapshotBtn">Sauvegarder l'instantané</button>
+                    <button class="btn btn-outline" id="selectAllFooterBtn">Tout sélectionner</button>
+                    <button class="btn btn-outline" id="deselectAllFooterBtn">Tout désélectionner</button>
+                    <button class="btn btn-outline" id="cancelHistoryBtn">Annuler</button>
+                    <button class="btn btn-primary" id="previewHistoryBtn">Aperçu</button>
+                    <button class="btn btn-danger" id="deleteHistoryBtn">Supprimer</button>
+                </div>
+            </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page Info -->
+    <div class="page-info">
+        <p>Dernière mise à jour: <span id="lastUpdate"></span></p>
+        <p><a href="creatNewsletter.html">Retour à la page d'édition principale</a></p>
+    </div>
+
     <script>
+      // Use inline History modal on this page; instruct editor.js to skip its own history wiring
       window.__useInlineHistoryModal = true;
+      // Disable any automatic video->image poster generation in editor.js
       window.__disableVideoPoster = true;
     </script>
-    <!-- Core editor scripts -->
     <script src="editor.js"></script>
     <script src="history.js"></script>
-    <!-- Client-side export dependencies -->
-    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
     <script>
       document.addEventListener('DOMContentLoaded', function () {
         try {
@@ -727,6 +760,243 @@
         } catch (e) { /* no-op */ }
       });
     </script>
+    <!-- Client-side export dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    <script>
+        // Auto-standardize images: resize client-side and store under Image/
+        (function() {
+          const MAX_WIDTH = 1280;
+          const JPEG_QUALITY = 0.85;
+          const EDITABLE_ID = 'editableContent';
 
-    </body>
-    </html>
+          const editable = document.getElementById(EDITABLE_ID);
+          if (!editable) return;
+
+          function blobFromUrl(url) {
+            return fetch(url, { cache: 'no-store' }).then(r => r.ok ? r.blob() : Promise.reject(new Error('fetch failed')));
+          }
+
+          function createImageFromBlob(blob) {
+            return new Promise((resolve, reject) => {
+              const url = URL.createObjectURL(blob);
+              const img = new Image();
+              img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+              img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('img load')); };
+              img.src = url;
+            });
+          }
+
+          async function resizeBlobIfNeeded(blob, originalType) {
+            try {
+              const img = await createImageFromBlob(blob);
+              const w = img.naturalWidth || img.width || 0;
+              const h = img.naturalHeight || img.height || 0;
+              if (!w || !h) return blob;
+              const targetW = Math.min(MAX_WIDTH, w);
+              if (targetW === w) return blob; // already small
+              const targetH = Math.round(h * (targetW / w));
+              const canvas = document.createElement('canvas');
+              canvas.width = targetW; canvas.height = targetH;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, targetW, targetH);
+              // Keep PNG if original is PNG (likely graphics/transparency), else JPEG
+              const mime = (originalType && /png/i.test(originalType)) ? 'image/png' : 'image/jpeg';
+              const quality = mime === 'image/jpeg' ? JPEG_QUALITY : undefined;
+              return new Promise((resolve, reject) => {
+                canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), mime, quality);
+              });
+            } catch (_) {
+              return blob; // fail open: return original
+            }
+          }
+
+          function sanitizeBaseName(name) {
+            try {
+              const base = (name || '').split(/[\\/]/).pop() || 'image';
+              const noQuery = base.split('?')[0].split('#')[0];
+              const parts = noQuery.split('.');
+              const ext = parts.length > 1 ? ('.' + parts.pop()) : '';
+              const stem = parts.join('.') || 'image';
+              const safeStem = stem.replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 40) || 'image';
+              return safeStem + ext;
+            } catch { return 'image'; }
+          }
+
+          function extFromMime(mime) {
+            try {
+              if (!mime) return '.jpg';
+              if (/png/i.test(mime)) return '.png';
+              if (/webp/i.test(mime)) return '.webp';
+              return '.jpg';
+            } catch { return '.jpg'; }
+          }
+
+          async function uploadBlob(blob, suggestedName) {
+            const fn = sanitizeBaseName(suggestedName);
+            const fd = new FormData();
+            fd.append('image', blob, fn || 'image');
+            try { if (fn) fd.append('filename', fn); } catch (_) {}
+            try { fd.append('overwrite', '1'); } catch (_) {}
+            try {
+              const res = await fetch('upload_image.php', { method: 'POST', body: fd });
+              if (!res.ok) throw new Error('upload failed');
+              const data = await res.json();
+              if (!data || !data.success || !data.url) throw new Error('bad response');
+              return data.url; // e.g., Image/filename.jpg
+            } catch (e) {
+              return '';
+            }
+          }
+
+          function originalNameFromSrc(src) {
+            try {
+              if (!src) return '';
+              if (/^\s*Image\//i.test(src)) {
+                const p = src.trim().split(/[?#]/)[0];
+                return p.split('/').pop() || '';
+              }
+              if (/^https?:/i.test(src)) {
+                const u = new URL(src);
+                return (u.pathname.split('/').pop() || '').split('?')[0].split('#')[0];
+              }
+              return '';
+            } catch { return ''; }
+          }
+
+          async function processImgEl(img) {
+            try {
+              const src = img.getAttribute('src') || img.src || '';
+              if (!src) return;
+              // Skip if already local Image/ path
+              if (/^\s*Image\//i.test(src)) return;
+              const isData = /^data:/i.test(src);
+              const isHttp = /^https?:/i.test(src);
+              const isBlob = /^blob:/i.test(src);
+              if (!isData && !isHttp && !isBlob) return; // allow other relative paths untouched
+
+              const guessedName = isHttp ? src : (img.getAttribute('alt') || 'image');
+              // Obtain blob (CORS may block some remote URLs)
+              let blob;
+              if (isData) {
+                const m = src.match(/^data:([^;]+);base64,(.*)$/);
+                if (!m) return;
+                const mime = m[1];
+                const b64 = m[2];
+                const bin = atob(b64);
+                const arr = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                blob = new Blob([arr], { type: mime });
+              } else {
+                try { blob = await blobFromUrl(src); } catch { return; }
+              }
+
+              const resized = await resizeBlobIfNeeded(blob, blob.type || '');
+              const preferName = originalNameFromSrc(src) || guessedName;
+              const savedUrl = await uploadBlob(resized, preferName);
+              if (savedUrl) {
+                img.src = savedUrl;
+                img.removeAttribute('srcset');
+                img.removeAttribute('sizes');
+              }
+            } catch (_) { /* ignore */ }
+          }
+
+          // Observe newly added images within the editable area
+          const observer = new MutationObserver(muts => {
+            for (const m of muts) {
+              m.addedNodes && m.addedNodes.forEach(n => {
+                if (n.nodeType === 1) {
+                  if (n.tagName === 'IMG') processImgEl(n);
+                  n.querySelectorAll && n.querySelectorAll('img').forEach(processImgEl);
+                }
+              });
+            }
+          });
+          observer.observe(editable, { childList: true, subtree: true });
+
+          // Process paste/drop immediately after default insertion
+          editable.addEventListener('paste', () => {
+            setTimeout(() => {
+              editable.querySelectorAll('img').forEach(processImgEl);
+            }, 0);
+          });
+          editable.addEventListener('drop', () => {
+            setTimeout(() => {
+              editable.querySelectorAll('img').forEach(processImgEl);
+            }, 0);
+          });
+
+          // ZIP export logic wrapped in async function
+          async function exportZip() {
+            const imgs = Array.from(document.querySelectorAll('#' + EDITABLE_ID + ' img'));
+            let updated = 0, unchanged = 0, failed = 0;
+            let counter = 1;
+
+            for (const img of imgs) {
+              try {
+                const src = img.getAttribute('src') || '';
+                if (!src) { unchanged++; continue; }
+
+                // Obtain a blob for current image source
+                let blob;
+                if (/^data:/i.test(src)) {
+                  const m = src.match(/^data:([^;]+);base64,(.*)$/);
+                  if (!m) { unchanged++; continue; }
+                  const mime = m[1];
+                  const b64 = m[2];
+                  const bin = atob(b64);
+                  const arr = new Uint8Array(bin.length);
+                  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                  blob = new Blob([arr], { type: mime });
+                } else {
+                  try { blob = await blobFromUrl(src); } catch { failed++; continue; }
+                }
+                if (!blob) { failed++; continue; }
+
+                // Resize if needed
+                const resized = await resizeBlobIfNeeded(blob, blob.type || '');
+                const ext = extFromMime(resized.type || blob.type || '');
+
+                // Determine filename: keep original when possible, else derive from alt + counter
+                let fname = originalNameFromSrc(src);
+                if (!fname) {
+                  const guessedName = img.getAttribute('alt') || 'image';
+                  fname = sanitizeBaseName(guessedName) + '_' + String(counter).padStart(3, '0') + ext;
+                } else {
+                  // Ensure it has an extension compatible with the resized type
+                  if (!/\.[A-Za-z0-9]+$/.test(fname)) fname = fname + ext;
+                }
+
+                // Upload with overwrite intent
+                const uploadedUrl = await uploadBlob(resized, fname);
+                if (uploadedUrl) {
+                  img.src = uploadedUrl;
+                  img.removeAttribute('srcset');
+                  img.removeAttribute('sizes');
+                  updated++;
+                } else {
+                  failed++;
+                }
+
+                counter++;
+              } catch (_) {
+                failed++;
+              }
+            }
+
+            alert(`Images traitées: ${updated} mise(s) à jour, ${unchanged} inchangée(s), ${failed} échec(s)`);
+          }
+
+          document.addEventListener('DOMContentLoaded', function () {
+            const btn = document.getElementById('exportZipBtn');
+            if (btn) btn.addEventListener('click', exportZip);
+          });
+        })();
+    </script>
+
+</div> <!-- End of main-content-wrapper -->
+
+
+</body>
+</html>
