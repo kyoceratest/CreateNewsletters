@@ -139,9 +139,6 @@
                 <button class="tool-btn" id="historyBtn">
                     <i class="fas fa-history"></i> Historique
                 </button>
-                <button class="tool-btn" id="exportZipBtn">
-                    <i class="fas fa-image"></i> Redimensionner
-                </button>
             </div>
         </div>
     </div>
@@ -159,6 +156,7 @@
                 <option value="Verdana">Verdana</option>
             </select>
             <select id="fontSize" class="toolbar-select">
+                <option value="" selected>Taille</option>
                 <option value="52">Sujette </option>
                 <option value="22">Résumé </option>
                <option value="48">Titre G </option>
@@ -487,7 +485,7 @@
         </div>
         <script>
           (function(){
-            const EDITABLE_ID = 'editable-area';
+            const EDITABLE_ID = 'editableContent';
             function blobFromUrl(url) {
               return fetch(url).then(r => r.blob());
             }
@@ -705,6 +703,10 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <div id="editorStatus" style="display:none">
+      <span id="lastUpdate"></span>
     </div>
 
     <!-- Editor initialization flags (from original editor page) -->

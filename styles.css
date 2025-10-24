@@ -3506,7 +3506,6 @@ body:not(.accueil-page) .main-content .content-wrapper .content-area {
 
 /* Typography */
 .content-area h1 {
-  font-size: 36px; /* Title */
   line-height: 1.2;
   font-weight: 700;
   color: var(--kyo-text);
@@ -3514,7 +3513,6 @@ body:not(.accueil-page) .main-content .content-wrapper .content-area {
 }
 
 .content-area h2 {
-  font-size: 24px; /* Subtitle */
   line-height: 1.3;
   font-weight: 600;
   color: var(--kyo-text);
@@ -3523,7 +3521,6 @@ body:not(.accueil-page) .main-content .content-wrapper .content-area {
 }
 
 .content-area h3 {
-  font-size: 20px; /* Section heading */
   line-height: 1.35;
   font-weight: 600;
   color: var(--kyo-text);
@@ -3540,7 +3537,6 @@ body:not(.accueil-page) .main-content .content-wrapper .content-area {
 }
 
 .content-area p {
-  font-size: 16px; /* Body Big */
   color: #222;
   margin: 10px 0 14px;
 }

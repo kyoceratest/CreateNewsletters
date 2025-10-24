@@ -28,6 +28,47 @@ class NewsletterEditor {
         this.init();
     }
 
+    // Remove inline font and color styling from pasted HTML to enforce defaults
+    sanitizePastedHtml(rawHtml) {
+        try {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(rawHtml, 'text/html');
+            const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT, null, false);
+            const toRemove = [];
+            const stripStyleProps = (el) => {
+                try {
+                    if (el.style) {
+                        el.style.removeProperty('font-family');
+                        el.style.removeProperty('font');
+                        el.style.removeProperty('font-size');
+                        el.style.removeProperty('color');
+                        el.style.removeProperty('background');
+                        el.style.removeProperty('background-color');
+                        el.style.removeProperty('text-decoration-color');
+                    }
+                    // Also remove presentational attributes
+                    if (el.hasAttribute && el.hasAttribute('color')) el.removeAttribute('color');
+                    if (el.hasAttribute && el.hasAttribute('face')) el.removeAttribute('face');
+                    if (el.hasAttribute && el.hasAttribute('size')) el.removeAttribute('size');
+                } catch (_) {}
+            };
+            // Convert <font> to <span> and strip attributes
+            doc.body.querySelectorAll('font').forEach(f => {
+                const span = doc.createElement('span');
+                span.innerHTML = f.innerHTML;
+                f.parentNode && f.parentNode.replaceChild(span, f);
+            });
+            // Walk and strip unwanted inline styles
+            while (walker.nextNode()) {
+                const el = walker.currentNode;
+                stripStyleProps(el);
+            }
+            return doc.body.innerHTML;
+        } catch (e) {
+            return rawHtml; // fallback
+        }
+    }
+
     // Normalize any blob-based video sources to media/<filename> on page load (so refresh keeps videos playable)
     static normalizeLocalVideoSourcesOnLoad() {
         try {
@@ -225,7 +266,7 @@ class NewsletterEditor {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${pageTitle}</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=20250922-1" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
   <link rel="icon" type="image/png" href="Image/header_footer/logo.png"/>
   <style> *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none} [contenteditable]{pointer-events:none} :focus{outline:none!important} </style>
@@ -356,6 +397,24 @@ class NewsletterEditor {
         // Track caret/range within the editor so insertions follow the user's pointer/caret
         const editableHost = document.getElementById('editableContent');
         if (editableHost) {
+            // Sanitize pasted content to default styles (Verdana + default color)
+            editableHost.addEventListener('paste', (e) => {
+                try {
+                    const cd = e.clipboardData || window.clipboardData;
+                    if (!cd) return; // let default happen
+                    const html = cd.getData('text/html');
+                    const text = cd.getData('text/plain');
+                    if (!html && !text) return;
+                    e.preventDefault();
+                    if (html) {
+                        const clean = this.sanitizePastedHtml(html);
+                        document.execCommand('insertHTML', false, clean);
+                    } else {
+                        document.execCommand('insertText', false, text);
+                    }
+                    try { this.saveState(); } catch (_) {}
+                } catch (_) { /* fall back to default paste */ }
+            });
             const updateRangeFromSelection = () => {
                 const sel = window.getSelection();
                 if (sel && sel.rangeCount > 0) {
@@ -1326,7 +1385,8 @@ class NewsletterEditor {
 
         // Font size handlers — apply on both change and click (when value may not change)
         const applyFontSize = (fontSize) => {
-            if (editable) editable.focus();
+            // Ignore placeholder/no-op so opening the dropdown doesn't steal focus and close it
+            if (!fontSize) return;
             this.restoreSelection();
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) return;
@@ -1379,7 +1439,6 @@ class NewsletterEditor {
 
             if (fontSize === '52') {
                 try {
-                    document.execCommand('removeFormat');
                     const span = document.createElement('span');
                     span.style.fontSize = '52px';
                     span.style.lineHeight = '1.2';
@@ -1414,14 +1473,16 @@ class NewsletterEditor {
         };
 
         const fontSizeSelect = document.getElementById('fontSize');
-        // Apply size on change and on mouseup (so users who click-and-hold then release still apply)
+        // Preserve selection right before opening the dropdown
+        fontSizeSelect.addEventListener('mousedown', () => this.saveSelection());
+        fontSizeSelect.addEventListener('focus', () => this.saveSelection());
+        // Apply on input (fires immediately when value changes) and on change (fallback)
+        fontSizeSelect.addEventListener('input', (e) => applyFontSize(e.target.value));
         fontSizeSelect.addEventListener('change', (e) => applyFontSize(e.target.value));
-        fontSizeSelect.addEventListener('mouseup', (e) => applyFontSize(e.target.value));
 
         // Line height handlers — similar behavior to font size
         const applyLineHeight = (lh) => {
             if (!lh) return; // ignore placeholder option
-            if (editable) editable.focus();
             this.restoreSelection();
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) return;
@@ -1471,8 +1532,11 @@ class NewsletterEditor {
 
         const lineHeightSelect = document.getElementById('lineHeight');
         if (lineHeightSelect) {
+            // Preserve selection right before opening the dropdown
+            lineHeightSelect.addEventListener('mousedown', () => this.saveSelection());
+            lineHeightSelect.addEventListener('focus', () => this.saveSelection());
+            lineHeightSelect.addEventListener('input', (e) => applyLineHeight(e.target.value));
             lineHeightSelect.addEventListener('change', (e) => applyLineHeight(e.target.value));
-            lineHeightSelect.addEventListener('mouseup', (e) => applyLineHeight(e.target.value));
         }
 
         // Text formatting buttons
