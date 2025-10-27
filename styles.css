@@ -566,6 +566,21 @@ body {
     background: #ffffff;
 }
 
+/* Fix list marker alignment inside editor (scoped) */
+.newsletter-editor .editable-content ul,
+.newsletter-editor .editable-content ol {
+  padding-left: 2em;      /* restore standard left padding removed by global reset */
+  margin-left: 0;         /* avoid double-indentation */
+  list-style-position: outside; /* keep marker outside text block */
+}
+.newsletter-editor .editable-content li > p {
+  display: inline;  /* ensure marker and text are on the same line */
+  margin: 0;        /* remove extra spacing inside list items */
+}
+.newsletter-editor .editable-content li {
+  line-height: inherit; /* keep consistent line-height with surrounding text */
+}
+
 .tool-section h3 {
     font-size: 18px;
     margin-bottom: 20px;

@@ -265,6 +265,7 @@ class NewsletterEditor {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow,noarchive,noimageindex">
   <title>${pageTitle}</title>
   <link rel="stylesheet" href="styles.css?v=20250922-1" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
@@ -671,49 +672,59 @@ class NewsletterEditor {
                 } catch (_) {}
                 const input = document.createElement('input');
                 input.type = 'file';
-                input.accept = '.xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv';
-                input.onchange = (e) => {
+                input.accept = '.pdf,application/pdf';
+                input.onchange = async (e) => {
                     const file = e.target.files && e.target.files[0];
                     if (!file) return;
-                    if (typeof XLSX === 'undefined') {
-                        alert("Bibliothèque Excel non chargée. Veuillez vérifier votre connexion internet.");
-                        return;
+                    try {
+                        const blobUrl = URL.createObjectURL(file);
+                        // Load PDF.js on demand if not already present
+                        const ensurePdfJs = () => new Promise((resolve, reject) => {
+                            if (window.pdfjsLib) return resolve();
+                            const script = document.createElement('script');
+                            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.10.111/pdf.min.js';
+                            script.onload = () => {
+                                try {
+                                    if (window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) {
+                                        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.10.111/pdf.worker.min.js';
+                                    }
+                                } catch (_) {}
+                                resolve();
+                            };
+                            script.onerror = () => reject(new Error('PDF.js load failed'));
+                            document.head.appendChild(script);
+                        });
+                        await ensurePdfJs();
+                        const pdf = await window.pdfjsLib.getDocument({ url: blobUrl }).promise;
+                        const page = await pdf.getPage(1);
+                        const viewport = page.getViewport({ scale: 1.5 });
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        await page.render({ canvasContext: ctx, viewport }).promise;
+                        const dataUrl = canvas.toDataURL('image/png');
+                        URL.revokeObjectURL(blobUrl);
+
+                        const img = document.createElement('img');
+                        img.src = dataUrl;
+                        img.alt = file.name || 'PDF';
+                        img.style.maxWidth = '100%';
+                        img.style.height = 'auto';
+
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'imported-pdf-image';
+                        wrapper.appendChild(img);
+
+                        this.insertElementAtCursor(wrapper);
+                        this.saveState();
+                        this.updateLastModified();
+                        this.autoSaveToLocalStorage();
+                        this.lastAction = 'Image PDF importée';
+                    } catch (err) {
+                        console.error('Import PDF failed:', err);
+                        alert("Échec de l'import PDF");
                     }
-                    const reader = new FileReader();
-                    reader.onload = () => {
-                        try {
-                            const data = new Uint8Array(reader.result);
-                            const wb = XLSX.read(data, { type: 'array' });
-                            const first = wb.SheetNames && wb.SheetNames[0];
-                            if (!first) throw new Error('Aucune feuille trouvée');
-                            const ws = wb.Sheets[first];
-                            // Generate HTML for the first sheet
-                            let html = XLSX.utils.sheet_to_html(ws, { header: '', footer: '' });
-                            // Parse and style table similar to insertTable default styles
-                            const parser = new DOMParser();
-                            const doc = parser.parseFromString(html, 'text/html');
-                            const table = doc.querySelector('table');
-                            if (!table) throw new Error('Table non générée');
-                            table.style.cssText = 'width: 100%; border-collapse: collapse; margin: 20px 0;';
-                            table.querySelectorAll('th, td').forEach(cell => {
-                                cell.style.cssText = 'border: 1px solid #ddd; padding: 8px; text-align: left;';
-                                cell.contentEditable = true;
-                            });
-                            // Wrap into a container to insert as a single element
-                            const wrapper = document.createElement('div');
-                            wrapper.className = 'imported-excel';
-                            wrapper.appendChild(table);
-                            this.insertElementAtCursor(wrapper);
-                            this.saveState();
-                            this.updateLastModified();
-                            this.autoSaveToLocalStorage();
-                            this.lastAction = 'Tableau Excel importé';
-                        } catch (err) {
-                            console.error('Import Excel failed:', err);
-                            alert("Échec de l'import Excel");
-                        }
-                    };
-                    reader.readAsArrayBuffer(file);
                 };
                 input.click();
                 const options = document.getElementById('importOptions');
@@ -801,7 +812,7 @@ class NewsletterEditor {
             // Ctrl+Click to show Section toolbar directly on the clicked section
             // This is an additive shortcut; existing behaviors remain unchanged.
             if (e.ctrlKey) {
-                const sectionElCtrl = e.target.closest('.newsletter-section, .gallery-section, .two-column-layout, .syc-item');
+                const sectionElCtrl = e.target.closest('.newsletter-section, .gallery-section, .two-column-layout, .syc-item, .cta-section');
                 if (sectionElCtrl) {
                     e.preventDefault();
                     this.showSectionToolbar(sectionElCtrl);
@@ -823,7 +834,7 @@ class NewsletterEditor {
                 }
             } catch (_) { /* no-op */ }
 
-            const sectionEl = e.target.closest('.newsletter-section, .gallery-section, .two-column-layout, .syc-item');
+            const sectionEl = e.target.closest('.newsletter-section, .gallery-section, .two-column-layout, .syc-item, .cta-section');
             const videoEl = e.target.closest('video, iframe');
             const tableEl = e.target.closest('table');
 
@@ -899,21 +910,23 @@ class NewsletterEditor {
         };
 
         const updateMouseRange = (e) => {
-            const r = getRangeFromPoint(e.clientX, e.clientY);
+            // Track pointer inside editor for precise insertion
+            this.lastMousePosition = { x: e.clientX, y: e.clientY };
+            const r = this.computeRangeFromPoint(e.clientX, e.clientY);
             if (r) {
-                this.lastMouseRange = r.cloneRange();
-            } else {
-                // Fallback: caret at end
-                const editableEl = document.getElementById('editableContent');
-                const endRange = document.createRange();
-                if (editableEl.lastChild) {
-                    endRange.setStartAfter(editableEl.lastChild);
-                } else {
-                    endRange.setStart(editableEl, editableEl.childNodes.length);
-                }
-                endRange.collapse(true);
-                this.lastMouseRange = endRange;
+                this.lastMouseRange = r.cloneRange ? r.cloneRange() : r;
+                return;
             }
+            // Fallback: caret at end
+            const editableEl = document.getElementById('editableContent');
+            const endRange = document.createRange();
+            if (editableEl.lastChild) {
+                endRange.setStartAfter(editableEl.lastChild);
+            } else {
+                endRange.setStart(editableEl, editableEl.childNodes.length);
+            }
+            endRange.collapse(true);
+            this.lastMouseRange = endRange;
         };
 
         editable.addEventListener('mousemove', updateMouseRange);
@@ -1115,7 +1128,7 @@ class NewsletterEditor {
 
             // Hide section toolbar when clicking outside
             if (!e.target.closest('#sectionToolbar')) {
-                if (!e.target.closest('.newsletter-section') && !e.target.closest('.gallery-section') && !e.target.closest('.two-column-layout') && !e.target.closest('.syc-item')) {
+                if (!e.target.closest('.newsletter-section') && !e.target.closest('.gallery-section') && !e.target.closest('.two-column-layout') && !e.target.closest('.syc-item') && !e.target.closest('.cta-section')) {
                     this.hideSectionToolbar();
                 }
             }
@@ -1334,6 +1347,26 @@ class NewsletterEditor {
             this.restoreSelection();
             document.execCommand(command, showUi, value);
             this.saveSelection();
+        };
+
+        // Ensure list markers follow text alignment by toggling list-style-position
+        const setListMarkerPositionForSelection = (mode) => {
+            try {
+                const sel = window.getSelection();
+                if (!sel || sel.rangeCount === 0) return;
+                let node = sel.anchorNode;
+                if (node && node.nodeType === 3) node = node.parentNode;
+                if (!node || !node.closest) return;
+                const list = node.closest('ul, ol');
+                if (!list) return;
+                if (mode === 'center' || mode === 'right') {
+                    list.style.listStylePosition = 'inside';
+                    list.style.textAlign = mode; // ensure alignment applies to the list block
+                } else {
+                    list.style.listStylePosition = 'outside';
+                    list.style.textAlign = 'left';
+                }
+            } catch (_) { /* ignore */ }
         };
 
         // Prefer styling with CSS spans instead of deprecated <font>
@@ -1713,18 +1746,26 @@ class NewsletterEditor {
         // Alignment buttons
         document.getElementById('alignLeftBtn').addEventListener('click', () => {
             execWithRestore('justifyLeft');
+            setListMarkerPositionForSelection('left');
+            try { this.saveState(); } catch (_) {}
         });
 
         document.getElementById('alignCenterBtn').addEventListener('click', () => {
             execWithRestore('justifyCenter');
+            setListMarkerPositionForSelection('center');
+            try { this.saveState(); } catch (_) {}
         });
 
         document.getElementById('alignRightBtn').addEventListener('click', () => {
             execWithRestore('justifyRight');
+            setListMarkerPositionForSelection('right');
+            try { this.saveState(); } catch (_) {}
         });
 
         document.getElementById('alignJustifyBtn').addEventListener('click', () => {
             execWithRestore('justifyFull');
+            setListMarkerPositionForSelection('justify');
+            try { this.saveState(); } catch (_) {}
         });
 
         // List buttons
@@ -1911,9 +1952,12 @@ class NewsletterEditor {
 
     // ===== Section Toolbar =====
     showSectionToolbar(sectionEl) {
-        this.currentEditingSection = sectionEl;
+        // Normalize to the actual section element using closest()
+        const sectionSelector = '.newsletter-section, .gallery-section, .two-column-layout, .syc-item, .cta-section';
+        const top = (sectionEl && sectionEl.closest && sectionEl.closest(sectionSelector)) || sectionEl;
+        this.currentEditingSection = top;
         const toolbar = document.getElementById('sectionToolbar');
-        const rect = sectionEl.getBoundingClientRect();
+        const rect = this.currentEditingSection.getBoundingClientRect();
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
         const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
         toolbar.style.top = `${rect.top + scrollTop - toolbar.offsetHeight - 8}px`;
@@ -1932,24 +1976,35 @@ class NewsletterEditor {
 
         // Wire once
         if (!this._sectionToolbarWired) {
-            document.getElementById('sectionMoveUpBtn').addEventListener('click', () => this.moveSection(-1));
-            document.getElementById('sectionMoveDownBtn').addEventListener('click', () => this.moveSection(1));
-            document.getElementById('sectionWidthBtn').addEventListener('click', (e) => {
+            const upBtn = document.getElementById('sectionMoveUpBtn');
+            const downBtn = document.getElementById('sectionMoveDownBtn');
+            const widthBtn = document.getElementById('sectionWidthBtn');
+            const widthOptions = document.getElementById('sectionWidthOptions');
+            const alignLeftBtn = document.getElementById('sectionAlignLeftBtn');
+            const alignCenterBtn = document.getElementById('sectionAlignCenterBtn');
+            const alignRightBtn = document.getElementById('sectionAlignRightBtn');
+            const deleteBtn = document.getElementById('sectionDeleteBtn');
+
+            upBtn && upBtn.addEventListener('click', () => this.moveSection(-1));
+            downBtn && downBtn.addEventListener('click', () => this.moveSection(1));
+            widthBtn && widthBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const dd = document.getElementById('sectionWidthOptions');
-                dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+                if (!widthOptions) return;
+                widthOptions.style.display = widthOptions.style.display === 'none' ? 'block' : 'none';
             });
-            document.querySelectorAll('#sectionWidthOptions .dropdown-item').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    const size = e.currentTarget.getAttribute('data-size');
-                    this.setSectionWidth(size);
-                    document.getElementById('sectionWidthOptions').style.display = 'none';
+            if (widthOptions) {
+                widthOptions.querySelectorAll('.dropdown-item').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const size = e.currentTarget.getAttribute('data-size');
+                        this.setSectionWidth(size);
+                        widthOptions.style.display = 'none';
+                    });
                 });
-            });
-            document.getElementById('sectionAlignLeftBtn').addEventListener('click', () => this.alignSection('left'));
-            document.getElementById('sectionAlignCenterBtn').addEventListener('click', () => this.alignSection('center'));
-            document.getElementById('sectionAlignRightBtn').addEventListener('click', () => this.alignSection('right'));
-            document.getElementById('sectionDeleteBtn').addEventListener('click', () => this.deleteSection());
+            }
+            alignLeftBtn && alignLeftBtn.addEventListener('click', () => this.alignSection('left'));
+            alignCenterBtn && alignCenterBtn.addEventListener('click', () => this.alignSection('center'));
+            alignRightBtn && alignRightBtn.addEventListener('click', () => this.alignSection('right'));
+            deleteBtn && deleteBtn.addEventListener('click', () => this.deleteSection());
             // Section background color dropdown wiring
             const secBgBtn = document.getElementById('sectionBgColorDropdownBtn');
             const secBgDropdown = document.getElementById('sectionBgColorDropdownContent');
@@ -2180,25 +2235,33 @@ class NewsletterEditor {
 
     moveSection(direction) {
         if (!this.currentEditingSection) return;
-        const section = this.currentEditingSection;
-        const isSection = (el) => !!(el && (el.classList && (el.classList.contains('newsletter-section') || el.classList.contains('gallery-section') || el.classList.contains('two-column-layout') || el.classList.contains('syc-item'))));
-        const prevEligible = () => {
-            let p = section.previousElementSibling;
-            while (p && !isSection(p)) p = p.previousElementSibling;
-            return p;
-        };
-        const nextEligible = () => {
-            let n = section.nextElementSibling;
-            while (n && !isSection(n)) n = n.nextElementSibling;
-            return n;
-        };
+        // Always work with the actual section element
+        const sectionSelector = '.newsletter-section, .gallery-section, .two-column-layout, .syc-item, .cta-section';
+        const section = (this.currentEditingSection.closest && this.currentEditingSection.closest(sectionSelector)) || this.currentEditingSection;
+        this.currentEditingSection = section;
 
-        if (direction < 0) {
-            const prev = prevEligible();
-            if (prev) section.parentNode.insertBefore(section, prev);
-        } else if (direction > 0) {
-            const next = nextEligible();
-            if (next) section.parentNode.insertBefore(next, section);
+        const isSection = (el) => !!(el && el.classList && (
+            el.classList.contains('newsletter-section') ||
+            el.classList.contains('gallery-section') ||
+            el.classList.contains('two-column-layout') ||
+            el.classList.contains('syc-item') ||
+            el.classList.contains('cta-section')
+        ));
+
+        // Build an ordered list of section siblings within the same parent
+        const parent = section && section.parentNode;
+        if (!parent) return;
+        const siblings = Array.from(parent.children).filter(isSection);
+        const idx = siblings.indexOf(section);
+        if (idx === -1) return;
+
+        if (direction < 0 && idx > 0) {
+            const target = siblings[idx - 1];
+            parent.insertBefore(section, target); // place just before the immediate previous eligible
+        } else if (direction > 0 && idx < siblings.length - 1) {
+            const target = siblings[idx + 1];
+            // Move down by inserting this section after the next eligible sibling
+            parent.insertBefore(section, target.nextSibling);
         }
         this.saveState();
         this.updateLastModified();
@@ -3188,79 +3251,27 @@ class NewsletterEditor {
     rotateImage(degrees) {
         if (!this.currentEditingImage) return;
         
-        // Create a canvas to perform the rotation
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+        // Read current rotation from CSS transform
+        let currentRotation = 0;
+        const transform = this.currentEditingImage.style.transform || '';
+        const match = transform.match(/rotate\((-?\d+)deg\)/);
+        if (match) {
+            currentRotation = parseInt(match[1]);
+        }
         
-        // Make sure the image is loaded
-        const img = new Image();
-        img.onload = () => {
-            // Get current rotation from transform style or default to 0
-            let currentRotation = 0;
-            const transform = this.currentEditingImage.style.transform;
-            if (transform) {
-                const match = transform.match(/rotate\((-?\d+)deg\)/);
-                if (match) {
-                    currentRotation = parseInt(match[1]);
-                }
-            }
-            
-            // Calculate new rotation
-            const newRotation = (currentRotation + degrees) % 360;
-            
-            // Determine if we need to swap width and height (for 90/270 degrees)
-            const swapDimensions = Math.abs(degrees) === 90 || Math.abs(degrees) === 270;
-            
-            // Set canvas dimensions based on rotation
-            if (swapDimensions) {
-                canvas.width = img.height;
-                canvas.height = img.width;
-            } else {
-                canvas.width = img.width;
-                canvas.height = img.height;
-            }
-            
-            // Clear the canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Translate and rotate the canvas context
-            ctx.save();
-            ctx.translate(canvas.width / 2, canvas.height / 2);
-            ctx.rotate(degrees * Math.PI / 180);
-            
-            // Draw the image centered on the canvas
-            ctx.drawImage(
-                img,
-                -img.width / 2,
-                -img.height / 2
-            );
-            
-            ctx.restore();
-            
-            // Apply the rotated image
-            const rotatedImageDataUrl = canvas.toDataURL('image/png');
-            
-            // Update the image
-            this.currentEditingImage.src = rotatedImageDataUrl;
-            this.currentEditingImage.style.transform = 'none'; // Reset transform as rotation is now in the image
-            
-            // Update dimensions if needed
-            if (swapDimensions) {
-                const temp = this.originalImageWidth;
-                this.originalImageWidth = this.originalImageHeight;
-                this.originalImageHeight = temp;
-            }
-            
-            this.saveState();
-            this.lastAction = 'Image tournée';
-            
-            // Refresh the resize handles
-            this.removeResizeHandles();
-            this.addResizeHandlesToImage(this.currentEditingImage);
-        };
+        // Compute new rotation
+        const newRotation = (currentRotation + degrees) % 360;
         
-        // Set the source to trigger the onload event
-        img.src = this.currentEditingImage.src;
+        // Preserve other transforms by removing existing rotate() then appending a new one
+        let baseTransform = transform.replace(/rotate\((-?\d+)deg\)/, '').trim();
+        const finalTransform = (baseTransform ? baseTransform + ' ' : '') + `rotate(${newRotation}deg)`;
+        this.currentEditingImage.style.transform = finalTransform;
+        
+        // Persist state and refresh handles
+        this.saveState();
+        this.lastAction = 'Image tournée';
+        this.removeResizeHandles();
+        this.addResizeHandlesToImage(this.currentEditingImage);
     }
     
     // Central entry-point used by click handlers to activate the floating image tools
@@ -3368,19 +3379,22 @@ class NewsletterEditor {
             const maxLeft = Math.max(minLeft, viewportWidth - toolbarWidth - 10);
             left = Math.min(Math.max(left, minLeft), maxLeft);
 
-            // Prefer above image; if not enough space, place below
-            let top = rect.top + scrollTop - toolbarHeight - 10;
+            // Prefer above image; add clearance so it doesn't cover top controls/handles
+            const clearance = 36; // leave space for rotation/resize handles and a margin
+            let top = rect.top + scrollTop - toolbarHeight - clearance;
             const minTop = scrollTop + 10;
             if (top < minTop) {
-                top = rect.bottom + scrollTop + 10;
+                // Not enough space above, place below with same clearance
+                top = rect.bottom + scrollTop + clearance;
             }
 
             toolbar.style.left = left + 'px';
             toolbar.style.top = top + 'px';
         } catch (_) {
             // Fallback: align to left edge
+            const clearance = 36;
             toolbar.style.left = rect.left + 'px';
-            toolbar.style.top = (rect.top + scrollTop - toolbar.offsetHeight - 10) + 'px';
+            toolbar.style.top = (rect.top + scrollTop - toolbar.offsetHeight - clearance) + 'px';
         }
         
         // Setup toolbar if not already done
@@ -3578,8 +3592,7 @@ class NewsletterEditor {
                     wrapper.removeAttribute('data-temp-draggable');
                 }
                 
-                // Apply the rotation to the image data using canvas
-                this.applyRotationToImageData();
+                // Keep CSS-based rotation (non-destructive); just persist state
                 this.saveState();
                 this.lastAction = 'Image tournée';
             };
@@ -4942,8 +4955,8 @@ class NewsletterEditor {
                         try { el.focus(); } catch (_) {}
                     } catch (_) { /* no-op */ }
                 };
-                el.addEventListener('focus', clear);
-                el.addEventListener('click', clear);
+                el.addEventListener('focus', clear, true);
+                el.addEventListener('click', clear, true);
             };
 
             const titleEl = articleSection.querySelector('h2[contenteditable]');
@@ -4967,6 +4980,7 @@ class NewsletterEditor {
         
         this.insertElementAtCursor(articleSection);
         this.saveState();
+        try { this.showSectionToolbar(articleSection); } catch (_) {}
         document.getElementById('sectionOptions').style.display = 'none';
         this.lastAction = 'Section article insérée';
     }
@@ -5026,6 +5040,7 @@ class NewsletterEditor {
         
         this.insertElementAtCursor(gallerySection);
         this.saveState();
+        try { this.showSectionToolbar(gallerySection); } catch (_) {}
         document.getElementById('sectionOptions').style.display = 'none';
         this.lastAction = 'Section galerie insérée';
     }
@@ -5335,6 +5350,7 @@ class NewsletterEditor {
         
         this.insertElementAtCursor(quoteSection);
         this.saveState();
+        try { this.showSectionToolbar(quoteSection); } catch (_) {}
         document.getElementById('sectionOptions').style.display = 'none';
         this.lastAction = 'Section citation insérée';
     }
@@ -5347,7 +5363,9 @@ class NewsletterEditor {
         ctaSection.innerHTML = `
             <h3 contenteditable="true" style="color: white; margin: 0 0 15px 0; font-size: 28px; font-weight: bold;">Annonce</h3>
             <p contenteditable="true" style="color: rgba(255,255,255,0.9); font-size: 18px; margin-bottom: 25px; line-height: 1.6;">Publiez ici une annonce importante. Modifiez ce texte selon votre besoin.</p>
-            <span class="webinar-button" contenteditable="true" style="display: inline-block !important; background: white !important; color: #ee5a24 !important; padding: 15px 30px !important; border-radius: 50px !important; text-decoration: none !important; font-weight: bold !important; font-size: 16px !important; transition: transform 0.3s ease !important; box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important; border: none !important; white-space: normal !important; word-break: break-word !important; max-width: 100% !important; text-align: center !important;">Bouton</span>
+            <span class="webinar-button" contenteditable="false" style="display: inline-block !important; background: white !important; color: #ee5a24 !important; padding: 15px 30px !important; border-radius: 50px !important; text-decoration: none !important; font-weight: bold !important; font-size: 16px !important; transition: transform 0.3s ease !important; box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important; border: none !important; white-space: normal !important; word-break: break-word !important; max-width: 100% !important; text-align: center !important;">
+                <span class="btn-text" contenteditable="true" style="display:inline;">Bouton</span>
+            </span>
         `;
 
         // Apply two-column style pretext clearing to CTA default texts
@@ -5357,11 +5375,7 @@ class NewsletterEditor {
                     try {
                         if (el.dataset.cleared) return;
                         if (!isDefault()) return;
-                        if (el.tagName === 'P' || el.tagName === 'H1' || el.tagName === 'H2' || el.tagName === 'H3') {
-                            el.innerHTML = '<br>';
-                        } else {
-                            el.textContent = '';
-                        }
+                        el.innerHTML = '<br>';
                         el.dataset.cleared = '1';
                         const range = document.createRange();
                         range.selectNodeContents(el);
@@ -5372,20 +5386,142 @@ class NewsletterEditor {
                         try { el.focus(); } catch (_) {}
                     } catch (_) { /* no-op */ }
                 };
-                el.addEventListener('focus', clear);
-                el.addEventListener('click', clear);
+                el.addEventListener('focus', clear, true);
+                el.addEventListener('click', clear, true);
             };
 
             const h3 = ctaSection.querySelector('h3[contenteditable]');
             if (h3) clearOnFocus(h3, () => (h3.textContent || '').trim() === 'Annonce');
             const p = ctaSection.querySelector('p[contenteditable]');
             if (p) clearOnFocus(p, () => (p.textContent || '').trim().startsWith('Publiez ici'));
-            const btn = ctaSection.querySelector('.webinar-button[contenteditable]');
-            if (btn) clearOnFocus(btn, () => (btn.textContent || '').trim() === 'Bouton');
+            const btn = ctaSection.querySelector('.webinar-button');
+            const btnText = ctaSection.querySelector('.webinar-button .btn-text[contenteditable]');
+            if (btnText) {
+                clearOnFocus(btnText, () => (btnText.textContent || '').trim() === 'Bouton');
+                // Prevent deleting the button element when clearing its text
+                const placeCaretInside = () => {
+                    try {
+                        const r = document.createRange();
+                        r.selectNodeContents(btnText);
+                        r.collapse(true);
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(r);
+                    } catch (_) {}
+                };
+                const keepButtonOnKeyDown = (e) => {
+                    const key = e.key;
+                    if (key === 'Enter') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                    }
+                    if (key === 'Backspace' || key === 'Delete') {
+                        const sel = window.getSelection();
+                        const inside = sel && sel.anchorNode && btnText.contains(sel.anchorNode);
+                        if (!inside) return;
+                        const txt = (btnText.textContent || '').trim();
+                        // If selection spans content or last char would be removed, keep button
+                        if (!sel.isCollapsed || txt.length <= 1) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            btnText.innerHTML = '<br>';
+                            placeCaretInside();
+                        }
+                    }
+                };
+                const keepButtonOnBeforeInput = (e) => {
+                    const t = e.inputType || '';
+                    if (t === 'deleteContentBackward' || t === 'deleteContentForward' || t === 'deleteByCut') {
+                        const sel = window.getSelection();
+                        const inside = sel && sel.anchorNode && btnText.contains(sel.anchorNode);
+                        if (!inside) return;
+                        const txt = (btnText.textContent || '').trim();
+                        if (!sel || !sel.isCollapsed || txt.length <= 1) {
+                            e.preventDefault();
+                            btnText.innerHTML = '<br>';
+                            placeCaretInside();
+                        }
+                    }
+                };
+                const normalizeOnInput = () => {
+                    const txt = (btnText.textContent || '').trim();
+                    if (!txt) {
+                        btnText.innerHTML = '<br>';
+                        placeCaretInside();
+                    }
+                };
+                const normalizeOnBlur = () => {
+                    const txt = (btnText.textContent || '').trim();
+                    if (!txt) {
+                        // Restore placeholder but keep the button element for clarity
+                        btnText.textContent = 'Bouton';
+                    }
+                };
+                btnText.addEventListener('beforeinput', keepButtonOnBeforeInput, true);
+                btnText.addEventListener('keydown', keepButtonOnKeyDown, true);
+                btnText.addEventListener('input', normalizeOnInput, true);
+                btnText.addEventListener('blur', normalizeOnBlur, true);
+                btnText.addEventListener('click', (e) => { e.stopPropagation(); }, true);
+                // Prevent outer span from becoming editable due to browser quirks
+                btn.setAttribute('contenteditable', 'false');
+
+                // Guard against structural deletion when caret is adjacent to the button
+                const guardStructure = (e) => {
+                    const key = e.key;
+                    if (key !== 'Backspace' && key !== 'Delete') return;
+                    const sel = window.getSelection();
+                    if (!sel || sel.rangeCount === 0) return;
+                    const range = sel.getRangeAt(0);
+                    const container = range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer : range.startContainer.parentNode;
+                    // If caret is just after the button and Backspace is pressed, prevent removing the button
+                    if (key === 'Backspace') {
+                        // Determine node at caret - check previousSibling relative to a normalized container
+                        const parent = container;
+                        if (parent && parent.contains(btn)) {
+                            // Walk up to the CTA section direct children context
+                            let node = range.startContainer;
+                            let offset = range.startOffset;
+                            if (node.nodeType === Node.TEXT_NODE) {
+                                // If inside text and not at start, allow default
+                                if (offset > 0) return;
+                                node = node.parentNode;
+                                offset = Array.prototype.indexOf.call(node.parentNode ? node.parentNode.childNodes : [], node);
+                            }
+                            const siblings = node.parentNode ? node.parentNode.childNodes : [];
+                            const prev = siblings[offset - 1] || node.previousSibling;
+                            if (prev && (prev === btn || (prev.nodeType === 1 && prev.closest && prev.closest('.webinar-button') === btn))) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                return;
+                            }
+                        }
+                    }
+                    // If caret is just before the button and Delete is pressed, prevent removing the button
+                    if (key === 'Delete') {
+                        let node = range.startContainer;
+                        let offset = range.startOffset;
+                        if (node.nodeType === Node.TEXT_NODE) {
+                            if (offset < node.nodeValue.length) return; // not at end
+                            node = node.parentNode;
+                            offset = Array.prototype.indexOf.call(node.parentNode ? node.parentNode.childNodes : [], node) + 1;
+                        }
+                        const siblings = node.parentNode ? node.parentNode.childNodes : [];
+                        const next = siblings[offset] || node.nextSibling;
+                        if (next && (next === btn || (next.nodeType === 1 && next.closest && next.closest('.webinar-button') === btn))) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return;
+                        }
+                    }
+                };
+                ctaSection.addEventListener('keydown', guardStructure, true);
+            }
         } catch (_) { /* no-op */ }
         
         this.insertElementAtCursor(ctaSection);
         this.saveState();
+        try { this.showSectionToolbar(ctaSection); } catch (_) {}
         document.getElementById('sectionOptions').style.display = 'none';
         this.lastAction = 'Section CTA insérée';
     }
@@ -5451,6 +5587,7 @@ class NewsletterEditor {
         
         this.insertElementAtCursor(contactSection);
         this.saveState();
+        try { this.showSectionToolbar(contactSection); } catch (_) {}
         document.getElementById('sectionOptions').style.display = 'none';
         this.lastAction = 'Section contact insérée';
     }
@@ -5508,8 +5645,8 @@ class NewsletterEditor {
                         e.stopPropagation();
                     });
                 });
-                leftEditable.addEventListener('focus', clearIfDefault);
-                leftEditable.addEventListener('click', clearIfDefault);
+                leftEditable.addEventListener('focus', clearIfDefault, true);
+                leftEditable.addEventListener('click', clearIfDefault, true);
             }
         } catch (_) {}
 
@@ -5575,6 +5712,7 @@ class NewsletterEditor {
 
         this.insertElementAtCursor(twoColumnSection);
         this.saveState();
+        try { this.showSectionToolbar(twoColumnSection); } catch (_) {}
         document.getElementById('sectionOptions').style.display = 'none';
         this.lastAction = 'Section deux colonnes insérée';
     }
@@ -5931,6 +6069,7 @@ class NewsletterEditor {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex,nofollow,noarchive,noimageindex">
     <title>${fileName}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
