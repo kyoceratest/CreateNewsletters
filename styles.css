@@ -533,23 +533,41 @@ body {
 
 /* Sidebar Styles */
 .editor-sidebar {
-    width: 240px;
+    width: 180px;
     background-color: #ffffff;
-    padding: 20px;
+    padding: 20px 10px 20px 10px; /* left/right 10px */
     border-right: 1px solid #e0e0e0;
     position: fixed;
     left: 0;
     top: 75px;
     bottom: 0;
     overflow-y: auto;
+    overflow-x: hidden;             /* prevent horizontal scrollbar when buttons extend under scrollbar */
+    /* Use thin/overlay-like scrollbars; don't reserve extra gutter */
+    scrollbar-width: thin;           /* Firefox */
+    scrollbar-gutter: auto;          /* avoid reserving gutter space */
     box-shadow: 2px 0 4px rgba(0,0,0,0.1);
     z-index: 900;
+}
+
+/* Chrome/Edge (WebKit) scrollbar styling for sidebar */
+.editor-sidebar::-webkit-scrollbar {
+    width: 6px;
+}
+.editor-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.editor-sidebar::-webkit-scrollbar-thumb {
+    background-color: rgba(0,0,0,0.3);
+    border-radius: 4px;
+    border: 2px solid transparent; /* creates a thinner thumb */
+    background-clip: content-box;
 }
 
 /* Ensure editable canvas is visible beside the fixed sidebar and below fixed header (editor view) */
 .newsletter-editor .main-content {
     /* Leave room for the fixed left sidebar */
-    margin-left: 240px;
+    margin-left: 180px;
     /* Leave room for the fixed header */
     padding-top: 90px;
     /* Create a scrollable canvas area */
@@ -564,13 +582,15 @@ body {
 .newsletter-editor .editable-content {
     min-height: calc(100vh - 120px);
     background: #ffffff;
+    width: 100% !important; /* ensure editable content spans full available width */
 }
 
 /* Match output spacing inside editor canvas */
 .newsletter-editor .content-area {
-  padding-left: 60px !important;
-  padding-right: 60px !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
   box-sizing: border-box;
+  width: 100% !important; /* ensure content area spans full available width */
 }
 
 /* Fix list marker alignment inside editor (scoped) */
@@ -589,11 +609,15 @@ body {
 }
 
 .tool-section h3 {
-    font-size: 18px;
-    margin-bottom: 20px;
+    font-size: 20px;          /* adjusted as requested */
+    margin-bottom: 12px;
     color: #333;
     border-bottom: 2px solid #007bff;
-    padding-bottom: 10px;
+    padding-bottom: 8px;
+    width: 88%;               /* match button width */
+    margin-left: auto;        /* center within sidebar card */
+    margin-right: auto;       /* center within sidebar card */
+    text-align: center;       /* center the heading text */
 }
 
 .tool-group {
@@ -603,9 +627,11 @@ body {
 .tool-btn {
     display: flex;
     align-items: center;
-    width: 100%;
-    padding: 12px 15px;
+    width: 88%;
+    padding: 8px 5px;
     margin-bottom: 8px;
+    margin-right: auto; /* center horizontally */
+    margin-left: auto;  /* center horizontally */
     background: linear-gradient(135deg, #007bff, #0056b3);
     color: #fff;
     border: none;
@@ -624,8 +650,8 @@ body {
 }
 
 .tool-btn i {
-    margin-right: 10px;
-    font-size: 16px;
+    margin-right: 5px;
+    font-size: 14px;
 }
 
 .action-btn {
@@ -647,18 +673,32 @@ body {
 .image-options,
 .video-options {
     margin-top: 10px;
-    padding: 10px;
+    padding: 10px 0;         /* remove horizontal padding so inner buttons match main button width */
     background-color: #f8f9fa;
     border-radius: 6px;
     border: 1px solid #dee2e6;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     position: relative;
     z-index: 950;
+    width: 80%;            /* match main button width */
+    margin-left: auto;     /* center under the main button */
+    margin-right: auto;    /* center under the main button */
 }
 
 .section-options {
     margin: 0;
     padding: 0;
+    width: 80%;            /* match main button width */
+    margin-left: auto;     /* center under the main button */
+    margin-right: auto;    /* center under the main button */
+}
+
+/* Ensure Import options panel matches width/alignment too */
+.import-options {
+    width: 80%;
+    padding: 10px 0;       /* consistent with image/video panels */
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .option-btn {
@@ -3635,10 +3675,10 @@ footer.kyocera-footer *,
 
 /* Newsletter editor specific styles - override index page styles */
 body.newsletter-editor .main-content {
-    margin-left: 260px !important;
-    margin-top: 56px !important; /* Adjusted to match header height */
-    padding: 20px !important;
-    width: calc(100% - 280px) !important;
+    margin-left: 180px !important; /* match .editor-sidebar width to eliminate left white space */
+    margin-top: 56px !important;   /* Adjusted to match header height */
+    padding: 0 !important;         /* remove inner padding that created extra white space */
+    width: calc(100% - 180px) !important; /* only subtract the sidebar width */
 }
 
 /* Accueil page specific styles - content next to sidebar */
