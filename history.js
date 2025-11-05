@@ -387,9 +387,42 @@
           if (!computedName) computedName = document.title && document.title.trim() ? document.title.trim() : 'instantané_' + new Date().toLocaleString('fr-FR');
 
           let savedOk = false;
-          if (window.editor && typeof window.editor.saveToHistory === 'function') {
-            const res = window.editor.saveToHistory(computedName, content);
-            if (res) savedOk = true;
+          try {
+            const rawExisting = localStorage.getItem('newsletterHistory');
+            let existing = rawExisting ? JSON.parse(rawExisting) : [];
+            if (!Array.isArray(existing)) existing = [];
+            const nameToMatch = (computedName || '').trim();
+            const dupIndex = existing.findIndex(e => (e && (e.name || '')).trim() === nameToMatch);
+            if (dupIndex !== -1) {
+              const confirmReplace = window.confirm(`Un instantané nommé "${computedName}" existe déjà. Voulez-vous le remplacer ?`);
+              if (confirmReplace) {
+                const preview = content.replace(/<[^>]*>?/gm, '').substring(0, 150) + '...';
+                const lastAction = (window.editor && window.editor.lastAction) ? window.editor.lastAction : 'Action inconnue';
+                const oldId = existing[dupIndex].id || Date.now().toString();
+                existing[dupIndex] = {
+                  ...existing[dupIndex],
+                  id: String(oldId),
+                  name: computedName,
+                  content,
+                  date: new Date().toLocaleString('fr-FR'),
+                  preview,
+                  timestamp: Date.now(),
+                  lastAction
+                };
+                try { if (typeof saveFullContentToIDB === 'function') saveFullContentToIDB(String(oldId), content); } catch (_) {}
+                localStorage.setItem('newsletterHistory', JSON.stringify(existing));
+                savedOk = true;
+              } else {
+                savedOk = false;
+              }
+            }
+          } catch (_) { /* ignore duplicate check errors and fallback to normal flow */ }
+
+          if (!savedOk) {
+            if (window.editor && typeof window.editor.saveToHistory === 'function') {
+              const res = window.editor.saveToHistory(computedName, content);
+              if (res) savedOk = true;
+            }
           }
           if (!savedOk) {
             try {
@@ -403,6 +436,7 @@
               history.unshift(item);
               if (history.length > 200) history = history.slice(0, 200);
               localStorage.setItem('newsletterHistory', JSON.stringify(history));
+              try { if (typeof saveFullContentToIDB === 'function') saveFullContentToIDB(id, content); } catch (_) {}
               savedOk = true;
             } catch (e) { console.warn('Direct save to newsletterHistory failed:', e); }
           }

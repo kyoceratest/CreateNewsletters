@@ -566,6 +566,13 @@ body {
     background: #ffffff;
 }
 
+/* Match output spacing inside editor canvas */
+.newsletter-editor .content-area {
+  padding-left: 60px !important;
+  padding-right: 60px !important;
+  box-sizing: border-box;
+}
+
 /* Fix list marker alignment inside editor (scoped) */
 .newsletter-editor .editable-content ul,
 .newsletter-editor .editable-content ol {
@@ -956,13 +963,51 @@ body:not(.newsletter-editor) .two-column-layout img {
     border-radius: 6px;
     padding: 8px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    z-index: 1001;
+    z-index: 6001; /* above overlays and header/sidebar */
 }
 
 .video-tools {
     display: flex;
     align-items: center;
     gap: 6px;
+}
+
+.video-align-wrapper {
+    position: relative;
+    display: block;
+    max-width: 100%;
+}
+
+.video-toolbar-handle {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background-color: rgba(0,0,0,0.6);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 2;
+}
+
+.video-toolbar-handle:focus {
+    outline: none;
+}
+
+.video-align-wrapper:hover .video-toolbar-handle,
+.video-align-wrapper:focus-within .video-toolbar-handle {
+    opacity: 1;
+}
+
+.video-toolbar-handle i {
+    pointer-events: none;
 }
 
 /* Webinar Editing Toolbar */
@@ -1227,19 +1272,29 @@ body:not(.newsletter-editor) .two-column-layout img {
     cursor: move;
 }
 
+
 .float-left {
     float: left;
-    margin: 0 15px 15px 0;
+    margin: 0 20px 20px 0; /* 20px gap to the right and bottom */
 }
 
 .float-right {
     float: right;
-    margin: 0 0 15px 15px;
+    margin: 0 0 20px 20px; /* 20px gap to the left and bottom */
 }
 
 .position-inline {
     display: block;
     margin: 15px auto;
+}
+
+/* Ensure containers wrap floated images (no overlap when no text after image) */
+#editableContent::after,
+#editableContent .newsletter-section::after,
+#editableContent .column::after {
+  content: "";
+  display: block;
+  clear: both;
 }
 
 /* Dragging state */
@@ -1360,7 +1415,7 @@ body:not(.newsletter-editor) .two-column-layout img {
        coming from the editor (mirrors #editableContent { position: relative }) */
     position: relative;
     /* Match the editor's internal padding so absolute coordinates align 1:1
-       between modèle_newsletter.html (editor) and newsletter.html (viewer). */
+       between index.html (editor) and newsletter.html (viewer). */
     padding: 30px;
 }
 
@@ -1796,6 +1851,148 @@ body:not(.newsletter-editor) .gallery-grid {
 
 body:not(.newsletter-editor) .gallery-item {
     cursor: default;
+}
+
+/* Multi images section (distinct from Gallery) */
+.newsletter-section.multi-images-section {
+  margin: 20px auto;
+  padding: 0;
+  max-width: 1400px;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0;
+  position: static;   /* no stacking context */
+  clear: both;        /* start below any previous floats */
+  float: none;        /* stay in normal flow */
+  display: block;     /* ensure block-level placement */
+  overflow: auto;     /* new BFC to isolate from neighbor floats/margins */
+}
+
+.multi-title { margin: 0 0 16px 0; font-size: 20px; font-weight: 600; }
+
+.multi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+  grid-auto-flow: dense;
+  align-items: start;
+  grid-auto-rows: auto; /* auto-height rows so items expand with content */
+}
+
+.multi-item {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none !important;
+  transition: none;
+  position: relative;
+}
+.multi-item:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.12); }
+
+.multi-item img { width: auto; max-width: 100%; height: auto; object-fit: contain; border-radius: 6px; }
+
+/* Keep images block-level; do not override inline width/height so mouse resize works */
+.multi-images-section .multi-item img {
+  display: block;
+}
+
+/* If a tool forces absolute positioning, neutralize it inside Multi images */
+.multi-images-section .multi-item img[style*="position: absolute"] { position: static !important; }
+
+/* Lock video/iframe too if ever present inside a card */
+.multi-images-section .multi-item iframe,
+.multi-images-section .multi-item video {
+  position: static !important;
+  float: none !important;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  max-width: 100% !important;
+}
+
+.multi-images-section .multi-item { overflow: visible; }
+.multi-images-section .multi-item .multi-delete { z-index: 2; }
+
+.multi-item.multi-add { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:#777; border:2px dashed #cfd6dd; background:#fbfdff; cursor:pointer; }
+.multi-item.multi-add i { font-size:28px; }
+.multi-item.multi-add p { margin:0; font-size:13px; }
+
+/* Hide editor-only add tile in preview/final output */
+body:not(.newsletter-editor) .multi-item.multi-add { display: none !important; }
+.newsletter-editor .multi-item.multi-add { display: flex !important; pointer-events: auto; }
+/* When section has images, hide the big add tile in the editor too */
+.newsletter-editor .multi-images-section.has-items .multi-item.multi-add { display: none !important; }
+
+/* Hide editor-only controls in preview/final output */
+body:not(.newsletter-editor) .multi-item .multi-delete,
+body:not(.newsletter-editor) .multi-item .multi-add-inline { display: none !important; }
+
+/* Ensure card wraps floated media (contain floats) */
+.multi-item::after { content: ""; display: table; clear: both; }
+
+/* Ensure the whole section also clears internal floats */
+.multi-images-section::after { content: ""; display: table; clear: both; }
+
+/* When edited with tools, keep media within card width */
+.multi-images-section .multi-item img,
+.multi-images-section .multi-item iframe,
+.multi-images-section .multi-item video {
+  display: block;
+  height: auto !important;
+  max-width: 100% !important; /* allow inline width from tools; prevent overflow */
+}
+
+/* Auto-size cards by their content (no enforced min-height) */
+.multi-images-section .multi-item { height: auto; }
+.multi-images-section .multi-item.tall { height: auto; }
+
+/* Delete button for multi image card */
+.multi-item .multi-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.multi-item:hover .multi-delete { opacity: 1; }
+.multi-item .multi-delete i { pointer-events: none; }
+
+/* Inline add icon button */
+.multi-item .multi-add-inline {
+  position: absolute;
+  top: 6px;
+  right: 40px; /* next to delete */
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 999px;
+  background: rgba(10,155,205,0.9);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.multi-item:hover .multi-add-inline { opacity: 1; }
+.multi-item .multi-add-inline i { pointer-events: none; }
+
+@media (max-width: 768px) {
+  .newsletter-section.multi-images-section { padding: 0; }
+  .multi-grid { gap: 16px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); grid-auto-rows: auto; }
+}
+@media (max-width: 480px) {
+  .multi-grid { gap: 12px; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); grid-auto-rows: auto; }
 }
 
 .editable-content img {

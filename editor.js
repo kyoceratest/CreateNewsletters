@@ -20,12 +20,188 @@ class NewsletterEditor {
         this.lastMousePosition = { x: 0, y: 0 };
         this.lastHoveredTableCell = null;
         this.lastClickedTableCell = null;
+        this.tableContextCell = null;
+        this._selectedRowForAction = null;
+        this._inputSaveTimer = null;
         // Increment this when autosave schema/behavior changes to avoid restoring stale content
         this.storageVersion = '2';
         // Track last user action for history subtitle
         this.lastAction = 'Contenu modifié';
         // Initialize editor (wire buttons, toolbars, handlers)
         this.init();
+    }
+
+    init() {
+        try { console.log('NewsletterEditor initializing...'); } catch (_) {}
+        try { this.setupEventListeners(); } catch (_) {}
+        try {
+            const legacy = document.getElementById('tableContextMenu');
+            if (legacy && legacy.parentNode) legacy.parentNode.removeChild(legacy);
+        } catch (_) {}
+        try { this.restoreLastFromLocalStorage(); } catch (_) {}
+        try { this.saveState(); } catch (_) {}
+        try { this.updateLastModified && this.updateLastModified(); } catch (_) {}
+        try { console.log('NewsletterEditor initialized successfully'); } catch (_) {}
+    }
+
+    // Keep tables performant for typing: fixed layout, equal column widths, wrap long words
+    normalizeTableForTyping(table) {
+        if (!table) return;
+        try {
+            table.style.tableLayout = 'fixed';
+            table.style.width = table.style.width || '100%';
+            // Ensure an even-width colgroup exists
+            const rows = Array.from(table.rows || []);
+            const cols = rows[0] ? rows[0].cells.length : 0;
+            if (cols > 0) {
+                let cg = table.querySelector('colgroup[data-equalized="1"]');
+                if (!cg) {
+                    // Remove non-managed colgroups to avoid conflicts
+                    const existing = table.querySelectorAll('colgroup');
+                    existing.forEach(g => g.parentNode && g.parentNode.removeChild(g));
+                    cg = document.createElement('colgroup');
+                    cg.setAttribute('data-equalized', '1');
+                    for (let i = 0; i < cols; i++) {
+                        const col = document.createElement('col');
+                        col.style.width = (100 / cols) + '%';
+                        cg.appendChild(col);
+                    }
+                    table.insertBefore(cg, table.firstChild);
+                }
+            }
+            // Make all cells wrap safely to avoid width growth
+            table.querySelectorAll('th, td').forEach(cell => {
+                cell.style.wordBreak = 'break-word';
+                cell.style.overflowWrap = 'anywhere';
+                cell.style.whiteSpace = 'normal';
+                cell.contentEditable = 'true';
+            });
+        } catch (_) { /* no-op */ }
+    }
+
+    // Allow dragging an image wrapper up/down to reposition in text flow (not absolute)
+    makeImageFlowReorderable(wrapper) {
+        if (!wrapper) return;
+        // Avoid double-binding
+        if (wrapper.__flowDragBound) return;
+        wrapper.__flowDragBound = true;
+
+        const isAbsolute = () => wrapper.classList.contains('position-absolute') || wrapper.style.position === 'absolute';
+
+        let dragging = false;
+        let down = false;
+        let startX = 0, startY = 0;
+        const DRAG_THRESHOLD = 5; // px before we treat as a drag
+        let indicator = null;
+        const editableEl = document.getElementById('editableContent');
+
+        const cleanup = () => {
+            dragging = false;
+            document.removeEventListener('mousemove', onMove, true);
+            document.removeEventListener('mouseup', onUp, true);
+            if (indicator && indicator.parentNode) indicator.parentNode.removeChild(indicator);
+            indicator = null;
+            try { wrapper.classList.remove('dragging'); } catch (_) {}
+        };
+
+        const ensureIndicator = () => {
+            if (indicator) return indicator;
+            indicator = document.createElement('div');
+            indicator.style.position = 'fixed';
+            indicator.style.height = '6px';
+            indicator.style.background = 'linear-gradient(90deg, rgba(10,155,205,0.9), rgba(10,155,205,0.6))';
+            indicator.style.boxShadow = '0 0 0 1px rgba(10,155,205,0.35), 0 2px 6px rgba(10,155,205,0.25)';
+            indicator.style.borderRadius = '3px';
+            indicator.style.zIndex = '99999';
+            indicator.style.pointerEvents = 'none';
+            document.body.appendChild(indicator);
+            return indicator;
+        };
+
+        const onMove = (e) => {
+            if (!editableEl) return;
+            if (!dragging) {
+                if (!down) return;
+                const dx = Math.abs(e.clientX - startX);
+                const dy = Math.abs(e.clientY - startY);
+                if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
+                // Begin dragging now
+                dragging = true;
+                try { wrapper.classList.add('dragging'); } catch (_) {}
+            }
+            // Find block boundary at pointer
+            let r = null;
+            try { r = this.computeRangeFromPoint(e.clientX, e.clientY); } catch (_) {}
+            if (!r) return;
+            const containerRect = editableEl.getBoundingClientRect();
+            // Determine target block's top or bottom edge
+            let block = r.startContainer && (r.startContainer.nodeType === Node.ELEMENT_NODE ? r.startContainer : r.startContainer.parentElement);
+            while (block && block.parentElement && block.parentElement !== editableEl) {
+                block = block.parentElement;
+            }
+            if (!block || block === editableEl) return;
+            const br = block.getBoundingClientRect();
+            const after = e.clientY > (br.top + br.height / 2);
+            const y = after ? br.bottom : br.top;
+            const ind = ensureIndicator();
+            ind.style.left = (containerRect.left + 8) + 'px';
+            ind.style.width = Math.max(0, containerRect.width - 16) + 'px';
+            ind.style.top = (y - 3) + 'px'; // center the 6px bar on the boundary
+        };
+
+        const onUp = (e) => {
+            if (!down) { cleanup(); return; }
+            if (!dragging) { cleanup(); return; }
+            // Compute final range and move wrapper there
+            let r = null;
+            try { r = this.computeRangeFromPoint(e.clientX, e.clientY); } catch (_) {}
+            if (r) {
+                try {
+                    r.collapse(true);
+                    r.insertNode(wrapper);
+                    // Place caret after moved wrapper
+                    const sel = window.getSelection();
+                    const spacer = document.createElement('p');
+                    spacer.innerHTML = '<br>';
+                    wrapper.after(spacer);
+                    const newRange = document.createRange();
+                    newRange.selectNodeContents(spacer);
+                    newRange.collapse(true);
+                    sel.removeAllRanges();
+                    sel.addRange(newRange);
+                    this.saveState();
+                    this.lastAction = 'Image déplacée';
+                } catch (_) {}
+            }
+            cleanup();
+        };
+
+        wrapper.addEventListener('mousedown', (e) => {
+            // Ignore when absolute drag/resize/rotate handles are engaged
+            if (isAbsolute()) return; // free-position images use absolute drag handlers
+            const t = e.target;
+            if (t && (t.classList && (t.classList.contains('resize-handle') || t.classList.contains('rotation-handle')))) return;
+            // Start flow drag
+            down = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            document.addEventListener('mousemove', onMove, true);
+            document.addEventListener('mouseup', onUp, true);
+        });
+
+        // Show grab cursor when this wrapper can be flow-dragged
+        const updateCursor = () => {
+            try {
+                if (!isAbsolute()) {
+                    wrapper.style.cursor = 'grab';
+                } else {
+                    wrapper.style.cursor = '';
+                }
+            } catch (_) {}
+        };
+        updateCursor();
+        wrapper.addEventListener('mouseenter', updateCursor);
+        wrapper.addEventListener('transitionend', updateCursor);
     }
 
     // Remove inline font and color styling from pasted HTML to enforce defaults
@@ -297,60 +473,118 @@ class NewsletterEditor {
         const prev = wrapper.previousSibling;
         const next = wrapper.nextSibling;
 
-        // If two text nodes would become adjacent without a space, insert one
-        let spacer = null;
-        const prevText = prev && prev.nodeType === Node.TEXT_NODE ? prev.nodeValue : null;
-        const nextText = next && next.nodeType === Node.TEXT_NODE ? next.nodeValue : null;
-        const needSpace = !!(prevText !== null && nextText !== null && !/\s$/.test(prevText) && !/^\s/.test(nextText));
-        if (needSpace) {
-            spacer = document.createTextNode(' ');
-            parent.insertBefore(spacer, wrapper);
-        }
+    // If two text nodes would become adjacent without a space, insert one
+    let spacer = null;
+    const prevText = prev && prev.nodeType === Node.TEXT_NODE ? prev.nodeValue : null;
+    const nextText = next && next.nodeType === Node.TEXT_NODE ? next.nodeValue : null;
+    const needSpace = !!(prevText !== null && nextText !== null && !/\s$/.test(prevText) && !/^\s/.test(nextText));
+    if (needSpace) {
+        spacer = document.createTextNode(' ');
+        parent.insertBefore(spacer, wrapper);
+    }
 
-        // Remove wrapper (image + any handles)
-        parent.removeChild(wrapper);
+    // Remove wrapper (image + any handles)
+    parent.removeChild(wrapper);
 
-        // Place caret after spacer or before next sibling to avoid deleting nearby text
-        try {
-            const sel = window.getSelection();
-            if (sel) {
-                const range = document.createRange();
-                if (spacer && spacer.parentNode) {
-                    range.setStartAfter(spacer);
-                } else if (next && next.parentNode === parent) {
-                    range.setStart(parent, Array.prototype.indexOf.call(parent.childNodes, next));
-                } else if (prev && prev.parentNode === parent) {
-                    // After previous node
-                    const idx = Array.prototype.indexOf.call(parent.childNodes, prev);
-                    range.setStart(parent, idx + 1);
-                } else {
-                    range.selectNodeContents(parent);
-                    range.collapse(false);
-                }
-                range.collapse(true);
-                sel.removeAllRanges();
-                sel.addRange(range);
+    try {
+        const columnEl = parent && parent.closest ? parent.closest('.column') : null;
+        const inTwoColumn = columnEl && columnEl.closest && !!columnEl.closest('.two-column-layout');
+        if (inTwoColumn) {
+            const hasImg = columnEl.querySelector('img');
+            const hasPlaceholder = columnEl.querySelector('.image-placeholder');
+            if (!hasImg && !hasPlaceholder) {
+                const placeholder = document.createElement('div');
+                placeholder.className = 'image-placeholder';
+                placeholder.setAttribute('contenteditable', 'false');
+                placeholder.style.border = '2px dashed #ccc';
+                placeholder.style.padding = '40px';
+                placeholder.style.textAlign = 'center';
+                placeholder.style.cursor = 'pointer';
+                placeholder.style.borderRadius = '8px';
+                placeholder.innerHTML = '<i class="fas fa-image" style="font-size: 24px; color: #6c757d; margin-bottom: 10px;"></i>\n<p style="color: #6c757d; margin: 0;">Cliquez pour ajouter une image</p>';
+                placeholder.addEventListener('click', () => {
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = 'image/*';
+                    fileInput.style.display = 'none';
+                    
+                    fileInput.onchange = (e) => {
+                        const file = e.target.files && e.target.files[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            const img = document.createElement('img');
+                            img.src = event.target.result;
+                            img.alt = 'Image';
+                            img.setAttribute('contenteditable', 'false');
+                            img.style.cssText = 'width:100%;height:auto;border-radius:8px;display:block;';
+                            img.addEventListener('click', (ev) => {
+                                ev.stopPropagation();
+                                try { this.selectImage(img); } catch (_) {}
+                            });
+                            try {
+                                let sib = placeholder.nextElementSibling;
+                                while (sib) {
+                                    const nextSib = sib.nextElementSibling;
+                                    sib.remove();
+                                    sib = nextSib;
+                                }
+                            } catch (_) {}
+                            placeholder.replaceWith(img);
+                            try {
+                                const col = img.closest('.column');
+                                if (col) {
+                                    const children = Array.from(col.children);
+                                    let seen = false;
+                                    for (const child of children) {
+                                        if (child === img || (child.querySelector && child.querySelector('img') === img)) { seen = true; continue; }
+                                        if (seen) { try { child.remove(); } catch (_) {} }
+                                    }
+                                }
+                            } catch (_) {}
+                            this.saveState();
+                            this.lastAction = 'Image ajoutée';
+                        };
+                        reader.readAsDataURL(file);
+                    };
+                    fileInput.click();
+                });
+                columnEl.appendChild(placeholder);
             }
-        } catch (_) { /* no-op */ }
+        }
+    } catch (_) {}
 
-        // Persist editor state
-        try {
-            this.saveState();
-            this.updateLastModified();
-            this.autoSaveToLocalStorage();
-            this.lastAction = "Image supprimée";
-        } catch (_) { /* no-op */ }
-    }
+    // Place caret after spacer or before next sibling to avoid deleting nearby text
+    try {
+        const sel = window.getSelection();
+        if (sel) {
+            const range = document.createRange();
+            if (spacer && spacer.parentNode) {
+                range.setStartAfter(spacer);
+            } else if (next && next.parentNode === parent) {
+                range.setStart(parent, Array.prototype.indexOf.call(parent.childNodes, next));
+            } else if (prev && prev.parentNode === parent) {
+                // After previous node
+                const idx = Array.prototype.indexOf.call(parent.childNodes, prev);
+                range.setStart(parent, idx + 1);
+            } else {
+                range.selectNodeContents(parent);
+                range.collapse(false);
+            }
+            range.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+    } catch (_) { /* no-op */ }
 
-    init() {
-        console.log('NewsletterEditor initializing...');
-        this.setupEventListeners();
-        // Auto-restore last edit if available so placeholders are not shown after refresh
-        try { this.restoreLastFromLocalStorage(); } catch (_) { /* no-op */ }
-        this.saveState(); // Save initial state
+    // Persist editor state
+    try {
+        this.saveState();
         this.updateLastModified();
-        console.log('NewsletterEditor initialized successfully');
-    }
+        this.autoSaveToLocalStorage();
+        this.lastAction = "Image supprimée";
+    } catch (_) { /* no-op */ }
+}
 
     // Restore the most recent saved content from localStorage history into the editor
     restoreLastFromLocalStorage() {
@@ -398,7 +632,7 @@ class NewsletterEditor {
         // Track caret/range within the editor so insertions follow the user's pointer/caret
         const editableHost = document.getElementById('editableContent');
         if (editableHost) {
-            // Sanitize pasted content to default styles (Verdana + default color)
+            // Sanitize pasted content and force default paste size to 26px
             editableHost.addEventListener('paste', (e) => {
                 try {
                     const cd = e.clipboardData || window.clipboardData;
@@ -409,9 +643,12 @@ class NewsletterEditor {
                     e.preventDefault();
                     if (html) {
                         const clean = this.sanitizePastedHtml(html);
-                        document.execCommand('insertHTML', false, clean);
+                        const wrapped = `<span style="font-size:26px;">${clean}</span>`;
+                        document.execCommand('insertHTML', false, wrapped);
                     } else {
-                        document.execCommand('insertText', false, text);
+                        const safe = (text || '').replace(/[&<>\n]/g, (ch) => ({'&':'&amp;','<':'&lt;','>':'&gt;','\n':'<br>'}[ch]));
+                        const wrapped = `<span style="font-size:26px;">${safe}</span>`;
+                        document.execCommand('insertHTML', false, wrapped);
                     }
                     try { this.saveState(); } catch (_) {}
                 } catch (_) { /* fall back to default paste */ }
@@ -493,6 +730,11 @@ class NewsletterEditor {
 
         // Local image button
         document.getElementById('localImageBtn').addEventListener('click', () => {
+            // Persist current caret range so insertion follows the caret after file dialog
+            try {
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount > 0) this.lastMouseRange = sel.getRangeAt(0).cloneRange();
+            } catch (_) {}
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = 'image/*';
@@ -509,10 +751,12 @@ class NewsletterEditor {
         });
 
         // URL image button
-        document.getElementById('urlImageBtn').addEventListener('click', (e) => {
-            // Store the current mouse position when the button is clicked
-            this.lastMousePosition = { x: e.clientX, y: e.clientY };
-            
+        document.getElementById('urlImageBtn').addEventListener('click', () => {
+            // Persist current caret range so insertion follows the caret after prompt
+            try {
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount > 0) this.lastMouseRange = sel.getRangeAt(0).cloneRange();
+            } catch (_) {}
             const url = prompt('Entrez l\'URL de l\'image:');
             if (url) {
                 this.insertImage(url, 'Image URL');
@@ -573,9 +817,12 @@ class NewsletterEditor {
         }
 
         // Insert Table button
-        document.getElementById('insertTableBtn').addEventListener('click', () => {
-            this.insertTable();
-        });
+        const insertTableBtn = document.getElementById('insertTableBtn');
+        if (insertTableBtn) {
+            insertTableBtn.addEventListener('click', () => {
+                return;
+            });
+        }
 
         // Insert Section button
         document.getElementById('insertSectionBtn').addEventListener('click', () => {
@@ -591,6 +838,13 @@ class NewsletterEditor {
         document.getElementById('gallerySectionBtn').addEventListener('click', () => {
             this.insertGallerySection();
         });
+
+        const multiBtn = document.getElementById('multiImagesSectionBtn');
+        if (multiBtn) {
+            multiBtn.addEventListener('click', () => {
+                this.insertMultiImagesSection();
+            });
+        }
 
         document.getElementById('quoteSectionBtn').addEventListener('click', () => {
             this.insertQuoteSection();
@@ -777,24 +1031,113 @@ class NewsletterEditor {
         // Table toolbar events
         this.setupTableToolbar();
 
-        // Content change detection
-        document.getElementById('editableContent').addEventListener('input', () => {
-            this.saveState();
-            this.updateLastModified();
-            this.autoSaveToLocalStorage(); // Auto-save to localStorage
-            // Update last action for history subtitle
+        // Content change detection (debounced to improve typing performance)
+        document.getElementById('editableContent').addEventListener('input', (e) => {
+            // Update last action for history subtitle immediately
             this.lastAction = 'Texte modifié';
-            // Re-apply any persisted section background colors to withstand inner HTML rewrites
+            // If typing inside a table cell, disarm row deletion selection
             try {
-                const sectionsWithBg = document.querySelectorAll('.newsletter-section[data-section-bg]');
-                sectionsWithBg.forEach(sec => this.reapplySectionBackground(sec));
+                const inCell = e && e.target && e.target.closest ? e.target.closest('td,th') : null;
+                if (inCell) { this._selectedRowForAction = null; const t = inCell.closest('table'); this.normalizeTableForTyping(t); }
             } catch (_) { /* no-op */ }
+            // Debounce heavy saves while typing
+            if (this._inputSaveTimer) clearTimeout(this._inputSaveTimer);
+            this._inputSaveTimer = setTimeout(() => {
+                try {
+                    this.saveState();
+                    this.updateLastModified();
+                    this.autoSaveToLocalStorage();
+                    // Re-apply any persisted section background colors to withstand inner HTML rewrites
+                    try {
+                        const sectionsWithBg = document.querySelectorAll('.newsletter-section[data-section-bg]');
+                        sectionsWithBg.forEach(sec => this.reapplySectionBackground(sec));
+                    } catch (_) { /* no-op */ }
+                } catch (_) { /* no-op */ }
+            }, 300);
         });
 
         // Track selection inside editable content to keep toolbar actions working
         const editable = document.getElementById('editableContent');
+        const edge=8;
+        const clrSel=(t)=>{if(!t)return;t.querySelectorAll('td,th').forEach(c=>{c.style.outline='';c.style.outlineOffset='';c.style.backgroundColor='';});};
+        const mark=(c,on)=>{if(!c)return;if(on){c.style.outline='2px solid rgba(10,155,205,0.6)';c.style.outlineOffset='-2px';c.style.backgroundColor='rgba(10,155,205,0.07)';}else{c.style.outline='';c.style.outlineOffset='';c.style.backgroundColor='';}};
+        const rectSel=(t,a,b)=>{if(!t||!a||!b)return;const rs=Array.from(t.rows||[]);const ap={ri:rs.indexOf(a.parentElement),ci:a.cellIndex};const bp={ri:rs.indexOf(b.parentElement),ci:b.cellIndex};const r0=Math.min(ap.ri,bp.ri),r1=Math.max(ap.ri,bp.ri),c0=Math.min(ap.ci,bp.ci),c1=Math.max(ap.ci,bp.ci);rs.forEach((r,ri)=>{if(ri<r0||ri>r1)return;Array.from(r.cells).forEach((cc,ci)=>{if(ci>=c0&&ci<=c1)mark(cc,true);});});};
+        const atR=(r,x)=>r.right-x<=edge;const atB=(r,y)=>r.bottom-y<=edge;
+        const ensureFixed=(t)=>{if(!t)return;const r=t.getBoundingClientRect();if(!t.style.width||t.style.width.indexOf('%')!==-1)t.style.width=Math.max(20,Math.floor(r.width))+'px';t.style.tableLayout='fixed';};
+        const setColW=(t,ci,w)=>{w=Math.max(20,Math.floor(w));Array.from(t.rows||[]).forEach(r=>{const c=r.cells[ci];if(c)c.style.width=w+'px';});};
+        const autoFitCol=(t,ci)=>{let m=20;Array.from(t.rows||[]).forEach(r=>{const c=r.cells[ci];if(!c)return;const cs=window.getComputedStyle(c);const pad=parseFloat(cs.paddingLeft)+parseFloat(cs.paddingRight)+parseFloat(cs.borderLeftWidth)+parseFloat(cs.borderRightWidth);m=Math.max(m,Math.ceil(c.scrollWidth+pad));});ensureFixed(t);setColW(t,ci,m);};
+        const autoFitRow=(row)=>{let m=40;Array.from(row.cells||[]).forEach(c=>{const cs=window.getComputedStyle(c);const pad=parseFloat(cs.paddingTop)+parseFloat(cs.paddingBottom)+parseFloat(cs.borderTopWidth)+parseFloat(cs.borderBottomWidth);m=Math.max(m,Math.ceil(c.scrollHeight+pad),40);});row.style.height=m+'px';};
+        const autoFitTableWindow=(t)=>{t.style.width='100%';};
+        const distributeCols=(t)=>{const rs=Array.from(t.rows||[]);if(rs.length===0)return;const n=rs[0].cells.length;if(n===0)return;const tw=t.getBoundingClientRect().width;const w=Math.max(20,Math.floor(tw/n));ensureFixed(t);for(let i=0;i<n;i++)setColW(t,i,w);};
+        const distributeRows=(t)=>{const rs=Array.from(t.rows||[]);if(rs.length===0)return;let total=0;rs.forEach(r=>total+=r.getBoundingClientRect().height);const h=Math.max(20,Math.floor(total/rs.length));rs.forEach(r=>r.style.height=h+'px');};
+        let drag=null;let anchorCell=null;let activeTable=null;
+        let moveHandle=null;let moving=false;let movePlaceholder=null;let ctxMenu=null;let ctxRef={};
+        let selecting=false;
+        editable.addEventListener('mousedown',(e)=>{
+            const cell=e.target&&e.target.closest?e.target.closest('td,th'):null;const tbl=cell?cell.closest('table'):(e.target.closest?e.target.closest('table'):null);if(!tbl)return;activeTable=tbl;try{tbl.querySelectorAll('td,th').forEach(c=>c.contentEditable='true');}catch(_){}const tr=tbl.getBoundingClientRect();if(atR(tr,e.clientX)){drag={m:'tw',sx:e.clientX,w:tr.width,t:tbl};document.body.style.userSelect='none';e.preventDefault();return;}if(atB(tr,e.clientY)){drag={m:'th',sy:e.clientY,h:tr.height,t:tbl};document.body.style.userSelect='none';e.preventDefault();return;}if(!cell)return;const cr=cell.getBoundingClientRect();if(e.detail===2&&atR(cr,e.clientX)){autoFitCol(tbl,cell.cellIndex);return;}if(e.detail===2&&atB(cr,e.clientY)){autoFitRow(cell.parentElement);return;}if(atR(cr,e.clientX)){ensureFixed(tbl);drag={m:'col',sx:e.clientX,w:cr.width,ci:cell.cellIndex,t:tbl};document.body.style.userSelect='none';e.preventDefault();return;}if(atB(cr,e.clientY)){drag={m:'row',sy:e.clientY,h:cell.parentElement.getBoundingClientRect().height,row:cell.parentElement,t:tbl};document.body.style.userSelect='none';e.preventDefault();return;}if(e.shiftKey){if(!anchorCell||anchorCell.closest('table')!==tbl)anchorCell=cell;clrSel(tbl);rectSel(tbl,anchorCell,cell);return;}if(e.ctrlKey||e.metaKey){clrSel(tbl);const ci=cell.cellIndex;Array.from(tbl.rows||[]).forEach(r=>{const c=r.cells[ci];if(c)mark(c,true);});try{const sel=window.getSelection();if(sel)sel.removeAllRanges();}catch(_){}return;}if(e.altKey){clrSel(tbl);Array.from(cell.parentElement.cells||[]).forEach(c=>mark(c,true));try{const sel=window.getSelection();if(sel)sel.removeAllRanges();}catch(_){}return;}clrSel(tbl);mark(cell,true);anchorCell=cell;
+            // Start drag selection with left mouse button and no modifiers
+            if (e.button===0 && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+                selecting=true; document.body.style.userSelect='none';
+            }
+        });
+        const ensureMoveHandle=()=>{if(moveHandle)return;moveHandle=document.createElement('div');moveHandle.style.position='absolute';moveHandle.style.width='12px';moveHandle.style.height='12px';moveHandle.style.border='1px solid #0a9bcd';moveHandle.style.background='#fff';moveHandle.style.cursor='move';moveHandle.style.zIndex='5000';document.body.appendChild(moveHandle);moveHandle.addEventListener('mousedown',(e)=>{if(!activeTable)return;moving=true;e.preventDefault();document.body.style.userSelect='none';if(!movePlaceholder){movePlaceholder=document.createElement('div');movePlaceholder.style.height=activeTable.getBoundingClientRect().height+'px';movePlaceholder.style.border='1px dashed #0a9bcd';}activeTable.parentNode.insertBefore(movePlaceholder,activeTable);});};
+        const positionMoveHandle=()=>{if(!activeTable)return;if(!moveHandle)ensureMoveHandle();const r=activeTable.getBoundingClientRect();const sx=window.pageXOffset||document.documentElement.scrollLeft;const sy=window.pageYOffset||document.documentElement.scrollTop;moveHandle.style.left=Math.max(0,Math.floor(r.left+sx-14))+'px';moveHandle.style.top=Math.max(0,Math.floor(r.top+sy-14))+'px';moveHandle.style.display='block';};
+        editable.addEventListener('click',(e)=>{const t=e.target.closest?e.target.closest('table'):null;if(t){activeTable=t;this.normalizeTableForTyping(t);positionMoveHandle();} const inCell=e.target&&e.target.closest?e.target.closest('td,th'):null; if(inCell){ this._selectedRowForAction=null; }});
+        const updateDropPreview=(x,y)=>{const el=document.elementFromPoint(x,y);if(!el)return;const host=document.getElementById('editableContent');if(!host)return;const blk=el.closest?el.closest('#editableContent > *'):null; if(blk&&movePlaceholder&&blk!==movePlaceholder){host.insertBefore(movePlaceholder,blk);} else if(!blk&&movePlaceholder){host.appendChild(movePlaceholder);}};
+        document.addEventListener('mousemove',(e)=>{if(moving){updateDropPreview(e.clientX,e.clientY);e.preventDefault();return;}if(selecting&&activeTable){const el=document.elementFromPoint(e.clientX,e.clientY);const over=el&&el.closest?el.closest('td,th'):null; if(over&&over.closest('table')===activeTable&&anchorCell){clrSel(activeTable);rectSel(activeTable,anchorCell,over); const rs=Array.from(activeTable.rows||[]); const ap={ri:rs.indexOf(anchorCell.parentElement),ci:anchorCell.cellIndex}; const bp={ri:rs.indexOf(over.parentElement),ci:over.cellIndex}; const r0=Math.min(ap.ri,bp.ri), r1=Math.max(ap.ri,bp.ri); if (r0===r1 && r0>=0) { this._selectedRowForAction = rs[r0]; } else { this._selectedRowForAction = null; } try{const sel=window.getSelection();if(sel)sel.removeAllRanges();}catch(_){}} e.preventDefault();return;} if(activeTable&&moveHandle)positionMoveHandle();});
+        document.addEventListener('mouseup',()=>{if(selecting){selecting=false;document.body.style.userSelect='';} if(moving){moving=false;document.body.style.userSelect='';if(movePlaceholder&&movePlaceholder.parentNode){movePlaceholder.parentNode.insertBefore(activeTable,movePlaceholder);movePlaceholder.remove();}try{this.saveState();this.updateLastModified();this.autoSaveToLocalStorage();this.lastAction='Table déplacée';}catch(_){}}});
+        const ensureCtxMenu=()=>{ return; };
+        editable.addEventListener('contextmenu',(e)=>{ return; });
+        const mm=(e)=>{if(!drag)return;if(drag.m==='col'){const dx=e.clientX-drag.sx;setColW(drag.t,drag.ci,drag.w+dx);e.preventDefault();return;}if(drag.m==='row'){const dy=e.clientY-drag.sy;drag.row.style.height=Math.max(20,Math.floor(drag.h+dy))+'px';e.preventDefault();return;}if(drag.m==='tw'){const dx=e.clientX-drag.sx;drag.t.style.width=Math.max(50,Math.floor(drag.w+dx))+'px';e.preventDefault();return;}if(drag.m==='th'){const dy=e.clientY-drag.sy;drag.t.style.height=Math.max(20,Math.floor(drag.h+dy))+'px';e.preventDefault();return;}};
+        const mu=()=>{if(!drag)return;drag=null;document.body.style.userSelect='';try{this.saveState();this.updateLastModified();this.autoSaveToLocalStorage();this.lastAction='Taille du tableau modifiée';}catch(_){}};
+        document.addEventListener('mousemove',mm);
+        document.addEventListener('mouseup',mu);
+        document.addEventListener('keydown',(e)=>{ return; });
+        // Disarm row deletion selection on any non-delete key press
+        document.addEventListener('keydown',(e)=>{ if (e.key !== 'Delete' && e.key !== 'Backspace') { this._selectedRowForAction = null; } });
+        // Delete selected row with keyboard if a row was selected via context action
+        document.addEventListener('keydown',(e)=>{
+            if ((e.key === 'Delete' || e.key === 'Backspace') && this._selectedRowForAction && this.currentEditingTable) {
+                const row = this._selectedRowForAction;
+                // If the caret/selection is inside this row, do NOT delete the row (let text delete normally)
+                let selectionInsideRow = false;
+                try {
+                    const sel = window.getSelection();
+                    if (sel && sel.rangeCount > 0) {
+                        const container = sel.getRangeAt(0).startContainer;
+                        const host = container && (container.nodeType === Node.ELEMENT_NODE ? container : container.parentElement);
+                        if (host && row.contains(host)) selectionInsideRow = true;
+                    }
+                } catch (_) {}
+                if (selectionInsideRow) return; // allow normal text deletion
+
+                const allRows = this.currentEditingTable.querySelectorAll('tr');
+                if (allRows.length > 1) {
+                    row.remove();
+                    this._selectedRowForAction = null;
+                    try { this.saveState(); this.updateLastModified(); this.autoSaveToLocalStorage(); this.lastAction = 'Ligne de tableau supprimée'; } catch(_) {}
+                    e.preventDefault();
+                }
+            }
+        });
         editable.addEventListener('mouseup', () => this.saveSelection());
         editable.addEventListener('keyup', () => this.saveSelection());
+
+        const hoverCursor=(e)=>{
+            if (drag||moving) return;
+            const tbl=e.target&&e.target.closest?e.target.closest('table'):null;
+            if (!tbl) { editable.style.cursor=''; return; }
+            const tr=tbl.getBoundingClientRect();
+            if (tr.right - e.clientX <= edge) { editable.style.cursor='col-resize'; return; }
+            if (tr.bottom - e.clientY <= edge) { editable.style.cursor='row-resize'; return; }
+            const cell=e.target.closest?e.target.closest('td,th'):null;
+            if (!cell) { editable.style.cursor=''; return; }
+            const cr=cell.getBoundingClientRect();
+            if (cr.right - e.clientX <= edge) { editable.style.cursor='col-resize'; return; }
+            if (cr.bottom - e.clientY <= edge) { editable.style.cursor='row-resize'; return; }
+            editable.style.cursor='';
+        };
+        editable.addEventListener('mousemove', hoverCursor);
 
         // Show Video/Table toolbars on click; Section toolbar shows on Ctrl+Click
         editable.addEventListener('click', (e) => {
@@ -1054,9 +1397,7 @@ class NewsletterEditor {
                     if (imageWrapper) {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (confirm('Êtes-vous sûr de vouloir supprimer cette image ?')) {
-                            this.deleteImageWrapperSafe(imageWrapper);
-                        }
+                        (async () => { if (await this.confirmWithCancel("Êtes-vous sûr de vouloir supprimer cette image ?")) { this.deleteImageWrapperSafe(imageWrapper); } })();
                     }
                 }
             }
@@ -1216,35 +1557,7 @@ class NewsletterEditor {
         
         const img = this.currentEditingImage;
 
-        if (mode === 'absolute') {
-            // Absolute positioning relative to the nearest positioned ancestor
-            wrapper.classList.add('position-absolute');
-            // Keep image filling the wrapper bounds for absolute drag sizing
-            img.style.display = 'block';
-            img.style.position = 'static';
-            img.style.width = '100%';
-            img.style.height = 'auto';
-            img.style.objectFit = '';
-            // Choose positioning container: gallery image square or the main editable area
-            let container = wrapper.parentElement;
-            if (container) {
-                const candidate = container.closest('.gallery-image-container');
-                if (candidate) container = candidate; else container = document.getElementById('editableContent') || container;
-            } else {
-                container = document.getElementById('editableContent');
-            }
-            try {
-                const crect = container.getBoundingClientRect();
-                const mx = (this.lastMousePosition && this.lastMousePosition.x) || crect.left + 10;
-                const my = (this.lastMousePosition && this.lastMousePosition.y) || crect.top + 10;
-                const left = Math.max(0, mx - crect.left - (wrapper.offsetWidth / 2));
-                const top = Math.max(0, my - crect.top - (wrapper.offsetHeight / 2));
-                wrapper.style.left = left + 'px';
-                wrapper.style.top = top + 'px';
-            } catch (_) { /* no-op */ }
-            // Enable bounded dragging within the container
-            this.enableAbsoluteDrag(wrapper);
-        } else if (mode === 'float-left') {
+        if (mode === 'float-left') {
             wrapper.classList.add('float-left');
             // Ensure normal flow
             wrapper.style.position = 'relative';
@@ -1416,14 +1729,59 @@ class NewsletterEditor {
             execWithRestore('fontName', false, e.target.value);
         });
 
+        // Helpers to enforce single-use for Titre_P (52px) and Sous_titre_P (22px)
+        const getEditableRoot = () => document.getElementById('editableContent');
+        const countInlineFontSize = (px) => {
+            try {
+                const root = getEditableRoot();
+                if (!root) return 0;
+                let n = 0;
+                root.querySelectorAll('*').forEach(el => {
+                    if (el && el.style && el.style.fontSize === px) n++;
+                });
+                return n;
+            } catch (_) { return 0; }
+        };
+        const selectionWithinInlineFontSize = (px) => {
+            try {
+                const sel = window.getSelection();
+                if (!sel || sel.rangeCount === 0) return false;
+                let node = sel.getRangeAt(0).commonAncestorContainer;
+                if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+                const root = getEditableRoot();
+                while (node && node !== root) {
+                    if (node && node.style && node.style.fontSize === px) return true;
+                    node = node.parentElement;
+                }
+                return false;
+            } catch (_) { return false; }
+        };
+
         // Font size handlers — apply on both change and click (when value may not change)
+        let fontSizeAppliedRecently = false; // guard to avoid double-apply
         const applyFontSize = (fontSize) => {
+            fontSizeAppliedRecently = true;
             // Ignore placeholder/no-op so opening the dropdown doesn't steal focus and close it
             if (!fontSize) return;
             this.restoreSelection();
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) return;
             const range = selection.getRangeAt(0);
+
+            // Enforce uniqueness for 52 (Titre_P) and 22 (Sous_titre_P)
+            if (fontSize === '52' || fontSize === '22') {
+                const px = fontSize + 'px';
+                const existsCount = countInlineFontSize(px);
+                const alreadyInside = selectionWithinInlineFontSize(px);
+                if (existsCount >= 1 && !alreadyInside) {
+                    const msg = fontSize === '52'
+                        ? "Titre_P ne peut être utilisé qu'une seule fois dans ce document."
+                        : "Sous_titre_P ne peut être utilisé qu'une seule fois dans ce document.";
+                    alert(msg);
+                    try { document.getElementById('fontSize').value = ''; } catch (_) {}
+                    return; // do not apply a second instance
+                }
+            }
 
             // If collapsed selection, apply to the nearest block so one click works
             if (selection.isCollapsed) {
@@ -1466,6 +1824,8 @@ class NewsletterEditor {
                     }
                     this.saveSelection();
                     this.saveState();
+                    try { document.getElementById('fontSize').value = ''; } catch (_) {}
+                    setTimeout(() => { fontSizeAppliedRecently = false; }, 0);
                     return;
                 }
             }
@@ -1484,8 +1844,11 @@ class NewsletterEditor {
                     selection.addRange(newRange);
                     this.saveSelection();
                     this.saveState();
+                    try { document.getElementById('fontSize').value = ''; } catch (_) {}
+                    setTimeout(() => { fontSizeAppliedRecently = false; }, 0);
                 } catch (ex) {
-                    console.error('Error applying Sujette style:', ex);
+                    console.error('Error applying Titre_P style:', ex);
+                    fontSizeAppliedRecently = false;
                 }
             } else {
                 try {
@@ -1499,8 +1862,11 @@ class NewsletterEditor {
                     selection.addRange(newRange);
                     this.saveSelection();
                     this.saveState();
+                    try { document.getElementById('fontSize').value = ''; } catch (_) {}
+                    setTimeout(() => { fontSizeAppliedRecently = false; }, 0);
                 } catch (ex) {
                     console.error('Error applying font size:', ex);
+                    fontSizeAppliedRecently = false;
                 }
             }
         };
@@ -1512,6 +1878,105 @@ class NewsletterEditor {
         // Apply on input (fires immediately when value changes) and on change (fallback)
         fontSizeSelect.addEventListener('input', (e) => applyFontSize(e.target.value));
         fontSizeSelect.addEventListener('change', (e) => applyFontSize(e.target.value));
+        // Some browsers won't fire change when re-selecting the same option.
+        // Fallback: on pointerup (option chosen), if no recent apply happened, apply current value.
+        fontSizeSelect.addEventListener('pointerup', () => {
+            setTimeout(() => {
+                if (!fontSizeAppliedRecently) {
+                    const v = fontSizeSelect.value;
+                    if (v) applyFontSize(v);
+                }
+            }, 0);
+        });
+
+        // Reflect actual selection font-size in the dropdown
+        const optionValues = new Set(['52','48','36','26','22']);
+        const mapPxToOptionValue = (px) => {
+            const n = parseInt(px, 10);
+            if (!Number.isFinite(n)) return '';
+            if (n === 52) return '52';
+            if (n === 48) return '48';
+            if (n === 36) return '36';
+            if (n === 26) return '26';
+            if (n === 22) return '22';
+            return '';
+        };
+        const isInsideEditable = (node) => {
+            try {
+                const root = document.getElementById('editableContent');
+                if (!root || !node) return false;
+                if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+                return !!(node && root.contains(node));
+            } catch (_) { return false; }
+        };
+        const getExplicitInlineSizePx = (startNode) => {
+            try {
+                const root = document.getElementById('editableContent');
+                let node = startNode && (startNode.nodeType === Node.TEXT_NODE ? startNode.parentElement : startNode);
+                while (node && node !== root) {
+                    if (node.style && node.style.fontSize) return node.style.fontSize; // e.g., '52px'
+                    node = node.parentElement;
+                }
+                return '';
+            } catch (_) { return ''; }
+        };
+        let selectionReflectRaf = null;
+        const reflectSelectionFontSize = () => {
+            if (typeof isInteractingWithToolbar !== 'undefined' && isInteractingWithToolbar) return;
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) return;
+            const range = sel.getRangeAt(0);
+            const root = document.getElementById('editableContent');
+            if (!isInsideEditable(range.commonAncestorContainer)) return;
+
+            // If collapsed, use innermost explicit inline size first; fallback to nearest computed
+            if (sel.isCollapsed) {
+                let node = range.commonAncestorContainer;
+                const explicit = getExplicitInlineSizePx(node);
+                if (explicit) {
+                    const val = mapPxToOptionValue(explicit);
+                    if (fontSizeSelect && fontSizeSelect.value !== val) fontSizeSelect.value = val;
+                    return;
+                }
+                let el = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+                if (el && el.closest) {
+                    const nearest = el.closest('span, a, p, h1, h2, h3, h4, h5, h6, div');
+                    if (nearest) el = nearest;
+                }
+                const fs = window.getComputedStyle(el).fontSize;
+                const val = mapPxToOptionValue(fs);
+                if (fontSizeSelect && fontSizeSelect.value !== val) fontSizeSelect.value = val;
+                return;
+            }
+
+            // Non-collapsed: gather sizes of text nodes intersecting the selection
+            const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+            const sizes = new Set();
+            while (walker.nextNode()) {
+                const tn = walker.currentNode;
+                if (!tn.nodeValue || !tn.nodeValue.trim()) continue;
+                if (!range.intersectsNode(tn)) continue;
+                const explicit = getExplicitInlineSizePx(tn);
+                const fs = explicit || window.getComputedStyle(tn.parentElement || tn).fontSize;
+                const mapped = mapPxToOptionValue(fs);
+                if (mapped) sizes.add(mapped);
+                else sizes.add('other');
+                if (sizes.size > 1) break; // mixed sizes
+            }
+            let val = '';
+            if (sizes.size === 1) {
+                const only = sizes.values().next().value;
+                val = optionValues.has(only) ? only : '';
+            } else {
+                val = '';
+            }
+            if (fontSizeSelect && fontSizeSelect.value !== val) fontSizeSelect.value = val;
+        };
+        document.addEventListener('selectionchange', () => {
+            // Throttle with rAF
+            if (selectionReflectRaf) cancelAnimationFrame(selectionReflectRaf);
+            selectionReflectRaf = requestAnimationFrame(reflectSelectionFontSize);
+        });
 
         // Line height handlers — similar behavior to font size
         const applyLineHeight = (lh) => {
@@ -1521,11 +1986,11 @@ class NewsletterEditor {
             if (!selection || selection.rangeCount === 0) return;
             const range = selection.getRangeAt(0);
 
-            // If collapsed, apply to nearest block element
+            // If collapsed, apply to nearest block element (avoid inline spans)
             if (selection.isCollapsed) {
                 let node = range.startContainer;
                 if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
-                const targetEl = node && node.closest && node.closest('h1,h2,h3,h4,h5,h6,p,div,span,li');
+                const targetEl = node && node.closest && node.closest('h1,h2,h3,h4,h5,h6,p,div,li');
                 if (targetEl) {
                     // Apply to the target
                     targetEl.style.lineHeight = lh;
@@ -1538,15 +2003,25 @@ class NewsletterEditor {
                 }
             }
 
-            // Non-collapsed: wrap selection in span to apply line-height
+            // Non-collapsed: apply to all intersecting block elements to affect full lines
             try {
-                // If selection is within a block that already has an indent wrapper, set on that wrapper instead of creating nested spans
                 let hostNode = range.commonAncestorContainer;
                 if (hostNode.nodeType === Node.TEXT_NODE) hostNode = hostNode.parentElement;
-                const wrap = hostNode && (hostNode.closest && hostNode.closest('span[data-indent-wrap="1"]'));
-                if (wrap) {
-                    wrap.style.lineHeight = lh;
-                } else {
+                const root = document.getElementById('editableContent');
+                const blocks = root ? root.querySelectorAll('h1,h2,h3,h4,h5,h6,p,div,li') : [];
+                let applied = 0;
+                blocks.forEach(b => {
+                    try {
+                        if (range.intersectsNode(b)) {
+                            b.style.lineHeight = lh;
+                            const wrap = b.querySelector && b.querySelector('span[data-indent-wrap="1"]');
+                            if (wrap) wrap.style.lineHeight = lh;
+                            applied++;
+                        }
+                    } catch (_) {}
+                });
+                if (!applied) {
+                    // Fallback: wrap selection if no block found
                     const span = document.createElement('span');
                     span.style.lineHeight = lh;
                     span.appendChild(range.extractContents());
@@ -1819,6 +2294,25 @@ class NewsletterEditor {
         document.getElementById('indentBtn').addEventListener('click', () => {
             // If inside a list, keep native behavior (nest list items)
             this.restoreSelection();
+            const sel = window.getSelection();
+            const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+            const root = document.getElementById('editableContent');
+            if (range && root) {
+                const lis = Array.from(root.querySelectorAll('li'));
+                const hits = lis.filter(li => {
+                    try { return range.intersectsNode(li); } catch (_) { return false; }
+                });
+                if (hits.length > 1) {
+                    hits.forEach(li => {
+                        const cur = parseFloat(window.getComputedStyle(li).marginLeft) || 0;
+                        const next = Math.min(cur + 32, 320);
+                        li.style.marginLeft = next + 'px';
+                    });
+                    this.saveSelection();
+                    this.saveState();
+                    return;
+                }
+            }
             const target = getIndentTargetBlock();
             if (target && (target.tagName === 'LI' || target.tagName === 'UL' || target.tagName === 'OL')) {
                 // Nudge the list item or list as a whole to the right (bullet follows)
@@ -1854,6 +2348,25 @@ class NewsletterEditor {
         document.getElementById('outdentBtn').addEventListener('click', () => {
             // If inside a list, keep native behavior (un-nest list items)
             this.restoreSelection();
+            const sel = window.getSelection();
+            const range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
+            const root = document.getElementById('editableContent');
+            if (range && root) {
+                const lis = Array.from(root.querySelectorAll('li'));
+                const hits = lis.filter(li => {
+                    try { return range.intersectsNode(li); } catch (_) { return false; }
+                });
+                if (hits.length > 1) {
+                    hits.forEach(li => {
+                        const cur = parseFloat(window.getComputedStyle(li).marginLeft) || 0;
+                        const next = Math.max(cur - 32, 0);
+                        li.style.marginLeft = next + 'px';
+                    });
+                    this.saveSelection();
+                    this.saveState();
+                    return;
+                }
+            }
             const target = getIndentTargetBlock();
             if (target && (target.tagName === 'LI' || target.tagName === 'UL' || target.tagName === 'OL')) {
                 const cur = parseFloat(window.getComputedStyle(target).marginLeft) || 0;
@@ -2059,26 +2572,7 @@ class NewsletterEditor {
 
     // ===== Table Toolbar =====
     showTableToolbar(tableEl) {
-        this.currentEditingTable = tableEl;
-        const toolbar = document.getElementById('tableToolbar');
-        const rect = tableEl.getBoundingClientRect();
-        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-        
-        // Position toolbar above the table with more space to avoid covering first row
-        const toolbarHeight = toolbar.offsetHeight || 40; // fallback height
-        const gap = 15; // increased gap
-        const topPosition = rect.top + scrollTop - toolbarHeight - gap;
-        
-        // If toolbar would be too high (off screen), position it below the table instead
-        if (topPosition < scrollTop + 10) {
-            toolbar.style.top = `${rect.bottom + scrollTop + gap}px`;
-        } else {
-            toolbar.style.top = `${topPosition}px`;
-        }
-        
-        toolbar.style.left = `${rect.left + scrollLeft}px`;
-        toolbar.style.display = 'block';
+        return;
     }
 
     hideTableToolbar() {
@@ -2087,13 +2581,75 @@ class NewsletterEditor {
         this.currentEditingTable = null;
     }
 
+    // ===== Table Context Menu (Right-Click) =====
+    setupTableContextMenu() {
+        try { } catch (_) { /* no-op */ }
+    }
+
+    showTableContextMenu(x, y) {
+        const menu = this.tableContextMenu;
+        if (!menu) return;
+        menu.style.display = 'block';
+        // Keep within viewport
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const rect = menu.getBoundingClientRect();
+        const left = Math.min(x, vw - rect.width - 8);
+        const top = Math.min(y, vh - rect.height - 8);
+        menu.style.left = left + 'px';
+        menu.style.top = top + 'px';
+        // Hide other toolbars to reduce interference
+        this.hideTableToolbar();
+    }
+
+    hideTableContextMenu() {
+        const menu = this.tableContextMenu;
+        if (menu) menu.style.display = 'none';
+    }
+
+    // Split current cell into two stacked cells (adds a new row below)
+    splitTableCellHorizontally() {
+        return;
+    }
+
+    // Split current cell into two side-by-side cells (adds a new column after)
+    splitTableCellVertically() {
+        return;
+    }
+
+    // Selection helpers
+    selectTableRow() {
+        return;
+    }
+
+    selectTableColumn() {
+        return;
+    }
+
+    selectTableElement() {
+        return;
+    }
+
+    // Visual marking helpers (mirror existing hover/selection styles)
+    markTableCell(cell, on) {
+        return;
+    }
+
+    clearTableCellMarks(table) {
+        return;
+    }
+
+    // Remove all plain text from the current table (keep elements like images/links)
+    clearTablePlainText() {
+        return;
+    }
+
     // ===== Webinar Toolbar =====
     showWebinarToolbar(sectionEl) {
         this.currentWebinarSection = sectionEl;
         const toolbar = document.getElementById('webinarToolbar');
         const rect = sectionEl.getBoundingClientRect();
         const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-
+        const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
         toolbar.style.top = `${rect.top + scrollTop - toolbar.offsetHeight - 8}px`;
         toolbar.style.left = `${rect.left + (rect.width / 2) - (toolbar.offsetWidth / 2)}px`;
         toolbar.style.display = 'block';
@@ -2305,9 +2861,9 @@ class NewsletterEditor {
         this.showSectionToolbar(section);
     }
 
-    deleteSection() {
+    async deleteSection() {
         if (!this.currentEditingSection) return;
-        if (confirm('Supprimer cette section ?')) {
+        if (await this.confirmWithCancel('Supprimer cette section ?')) {
             this.currentEditingSection.remove();
             this.hideSectionToolbar();
             this.saveState();
@@ -2363,7 +2919,11 @@ class NewsletterEditor {
             document.getElementById('videoAlignLeftBtn').addEventListener('click', () => this.alignVideo('left'));
             document.getElementById('videoAlignCenterBtn').addEventListener('click', () => this.alignVideo('center'));
             document.getElementById('videoAlignRightBtn').addEventListener('click', () => this.alignVideo('right'));
-            document.getElementById('videoDeleteBtn').addEventListener('click', () => this.deleteVideo());
+            document.getElementById('videoDeleteBtn').addEventListener('click', async () => {
+                if (await this.confirmWithCancel('Supprimer cette vidéo ?')) {
+                    this.deleteVideo();
+                }
+            });
             this._videoToolbarWired = true;
         }
     }
@@ -2398,30 +2958,43 @@ class NewsletterEditor {
         if (!this.currentEditingVideo) return;
         const el = this.currentEditingVideo;
         const wrapper = el.parentElement && el.parentElement.classList.contains('video-align-wrapper') ? el.parentElement : null;
-        let container = wrapper || el;
-        container.style.display = '';
+        const container = wrapper || el;
+        const baseMargin = '10px';
+        container.style.display = 'block';
+        container.style.marginTop = baseMargin;
+        container.style.marginBottom = baseMargin;
         container.style.marginLeft = '';
         container.style.marginRight = '';
         container.style.textAlign = '';
+        el.style.marginTop = '';
+        el.style.marginBottom = '';
+        el.style.marginLeft = '';
+        el.style.marginRight = '';
 
         switch (alignment) {
             case 'left':
-                container.style.display = 'block';
                 container.style.marginLeft = '0';
                 container.style.marginRight = 'auto';
                 container.style.textAlign = 'left';
+                el.style.display = 'block';
+                el.style.marginLeft = '0';
+                el.style.marginRight = 'auto';
                 break;
             case 'center':
-                container.style.display = 'block';
                 container.style.marginLeft = 'auto';
                 container.style.marginRight = 'auto';
                 container.style.textAlign = 'center';
+                el.style.display = 'block';
+                el.style.marginLeft = 'auto';
+                el.style.marginRight = 'auto';
                 break;
             case 'right':
-                container.style.display = 'block';
                 container.style.marginLeft = 'auto';
                 container.style.marginRight = '0';
                 container.style.textAlign = 'right';
+                el.style.display = 'block';
+                el.style.marginLeft = 'auto';
+                el.style.marginRight = '0';
                 break;
         }
         this.saveState();
@@ -2431,25 +3004,23 @@ class NewsletterEditor {
         this.showVideoToolbar(el);
     }
 
-    deleteVideo() {
+    async deleteVideo() {
         if (!this.currentEditingVideo) return;
-        if (confirm('Supprimer cette vidéo ?')) {
-            const node = this.currentEditingVideo;
-            // If iframe inside a wrapper, remove wrapper; otherwise remove node
-            const parent = node.parentElement;
-            if (parent && parent.classList.contains('video-align-wrapper')) {
-                parent.remove();
-            } else {
-                // Fallback: remove the image directly
-                node.remove();
-            }
-            
-            this.hideVideoToolbar();
-            this.saveState();
-            this.updateLastModified();
-            this.autoSaveToLocalStorage();
-            this.lastAction = 'Vidéo supprimée';
+        const node = this.currentEditingVideo;
+        // If iframe inside a wrapper, remove wrapper; otherwise remove node
+        const parent = node.parentElement;
+        if (parent && parent.classList.contains('video-align-wrapper')) {
+            parent.remove();
+        } else {
+            // Fallback: remove the image directly
+            node.remove();
         }
+        
+        this.hideVideoToolbar();
+        this.saveState();
+        this.updateLastModified();
+        this.autoSaveToLocalStorage();
+        this.lastAction = 'Vidéo supprimée';
     }
 
     // Selection helpers
@@ -2647,302 +3218,21 @@ class NewsletterEditor {
 
     setupTableToolbar() {
         const toolbar = document.getElementById('tableToolbar');
-
-        // Insert row
-        document.getElementById('insertRowBtn').addEventListener('click', () => {
-            this.insertTableRow();
-        });
-
-        // Insert column
-        document.getElementById('insertColBtn').addEventListener('click', () => {
-            this.insertTableColumn();
-        });
-
-        // Delete row
-        document.getElementById('deleteRowBtn').addEventListener('click', () => {
-            this.deleteTableRow();
-        });
-
-        // Delete column
-        document.getElementById('deleteColBtn').addEventListener('click', () => {
-            this.deleteTableColumn();
-        });
-
-        // Table background color dropdown
-        document.getElementById('tableBgColorDropdownBtn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            const content = document.getElementById('tableBgColorDropdownContent');
-            content.style.display = content.style.display === 'none' ? 'block' : 'none';
-        });
-
-        // Table background color picker
-        const tableBgColorPickerEl = document.getElementById('tableBgColorPicker');
-        if (tableBgColorPickerEl) {
-            tableBgColorPickerEl.addEventListener('input', (e) => {
-                this.changeTableBackgroundColor(e.target.value);
-                const ic = document.querySelector('#tableBgColorDropdownBtn i');
-                if (ic) ic.style.backgroundColor = e.target.value;
-            });
-        }
-
-        // Table background color palette
-        document.getElementById('tableBgColorPalette').addEventListener('click', (e) => {
-            if (e.target.classList.contains('palette-color')) {
-                const color = e.target.dataset.color;
-                this.changeTableBackgroundColor(color);
-                const p2 = document.getElementById('tableBgColorPicker'); if (p2) p2.value = color;
-                document.getElementById('tableBgColorDropdownContent').style.display = 'none';
-            }
-        });
-
-        // Table primary colors
-        const tablePrimary = document.getElementById('tableBgPrimaryPalette');
-        if (tablePrimary) {
-            tablePrimary.addEventListener('click', (e) => {
-                if (e.target.classList.contains('palette-color')) {
-                    const color = e.target.dataset.color;
-                    this.changeTableBackgroundColor(color);
-                    const p = document.getElementById('tableBgColorPicker');
-                    if (p) p.value = color;
-                    const dd = document.getElementById('tableBgColorDropdownContent');
-                    if (dd) dd.style.display = 'none';
-                }
-            });
-        }
-
-        // Table standard colors
-        const tableStd = document.getElementById('tableBgStandardPalette');
-        if (tableStd) {
-            tableStd.addEventListener('click', (e) => {
-                if (e.target.classList.contains('palette-color')) {
-                    const color = e.target.dataset.color;
-                    this.changeTableBackgroundColor(color);
-                    const p = document.getElementById('tableBgColorPicker');
-                    if (p) p.value = color;
-                    const dd = document.getElementById('tableBgColorDropdownContent');
-                    if (dd) dd.style.display = 'none';
-                }
-            });
-        }
-
+        if (toolbar) toolbar.style.display = 'none';
     }
 
     // ===== Table Operations =====
-    insertTableRow() {
-        if (!this.currentEditingTable) return;
-        
-        const selection = window.getSelection();
-        let targetRow = null;
-        
-        if (selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            targetRow = range.startContainer.nodeType === Node.ELEMENT_NODE 
-                ? range.startContainer.closest('tr')
-                : range.startContainer.parentElement.closest('tr');
-        }
-        
-        if (!targetRow) {
-            // If no specific row selected, add to the end
-            const tbody = this.currentEditingTable.querySelector('tbody') || this.currentEditingTable;
-            targetRow = tbody.lastElementChild;
-        }
-        
-        if (targetRow) {
-            const newRow = targetRow.cloneNode(true);
-            // Clear content of new row cells
-            newRow.querySelectorAll('td, th').forEach(cell => {
-                cell.innerHTML = '';
-            });
-            targetRow.parentNode.insertBefore(newRow, targetRow.nextSibling);
-            
-            this.saveState();
-            this.updateLastModified();
-            this.autoSaveToLocalStorage();
-            this.lastAction = 'Ligne de tableau insérée';
-        }
-    }
+    insertTableRow() { return; }
 
-    insertTableColumn() {
-        if (!this.currentEditingTable) return;
-        
-        const selection = window.getSelection();
-        let targetCell = null;
-        let columnIndex = 0;
-        
-        if (selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            targetCell = range.startContainer.nodeType === Node.ELEMENT_NODE 
-                ? range.startContainer.closest('td, th')
-                : range.startContainer.parentElement.closest('td, th');
-        }
-        
-        if (targetCell) {
-            // Find column index
-            const row = targetCell.parentElement;
-            columnIndex = Array.from(row.children).indexOf(targetCell);
-        }
-        
-        // Add column to all rows
-        const rows = this.currentEditingTable.querySelectorAll('tr');
-        rows.forEach(row => {
-            const newCell = document.createElement(row.querySelector('th') ? 'th' : 'td');
-            newCell.innerHTML = '';
-            if (columnIndex < row.children.length) {
-                row.insertBefore(newCell, row.children[columnIndex + 1]);
-            } else {
-                row.appendChild(newCell);
-            }
-        });
-        
-        this.saveState();
-        this.updateLastModified();
-        this.autoSaveToLocalStorage();
-        this.lastAction = 'Colonne de tableau insérée';
-    }
+    insertTableColumn() { return; }
 
-    deleteTableRow() {
-        if (!this.currentEditingTable) return;
-        
-        const selection = window.getSelection();
-        let targetRow = null;
-        
-        if (selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            targetRow = range.startContainer.nodeType === Node.ELEMENT_NODE 
-                ? range.startContainer.closest('tr')
-                : range.startContainer.parentElement.closest('tr');
-        }
-        
-        if (targetRow && confirm('Supprimer cette ligne ?')) {
-            // Don't delete if it's the only row
-            const allRows = this.currentEditingTable.querySelectorAll('tr');
-            if (allRows.length > 1) {
-                targetRow.remove();
-                this.saveState();
-                this.updateLastModified();
-                this.autoSaveToLocalStorage();
-                this.lastAction = 'Ligne de tableau supprimée';
-            } else {
-                alert('Impossible de supprimer la dernière ligne du tableau.');
-            }
-        }
-    }
+    deleteTableRow() { return; }
 
-    deleteTableColumn() {
-        if (!this.currentEditingTable) return;
-        
-        const selection = window.getSelection();
-        let targetCell = null;
-        let columnIndex = 0;
-        
-        if (selection.rangeCount > 0) {
-            const range = selection.getRangeAt(0);
-            targetCell = range.startContainer.nodeType === Node.ELEMENT_NODE 
-                ? range.startContainer.closest('td, th')
-                : range.startContainer.parentElement.closest('td, th');
-        }
-        
-        if (targetCell) {
-            const row = targetCell.parentElement;
-            columnIndex = Array.from(row.children).indexOf(targetCell);
-            
-            // Check if it's the only column
-            if (row.children.length <= 1) {
-                alert('Impossible de supprimer la dernière colonne du tableau.');
-                return;
-            }
-            
-            if (confirm('Supprimer cette colonne ?')) {
-                // Remove column from all rows
-                const rows = this.currentEditingTable.querySelectorAll('tr');
-                rows.forEach(row => {
-                    if (row.children[columnIndex]) {
-                        row.children[columnIndex].remove();
-                    }
-                });
-                
-                this.saveState();
-                this.updateLastModified();
-                this.autoSaveToLocalStorage();
-                this.lastAction = 'Colonne de tableau supprimée';
-            }
-        }
-    }
+    deleteTableColumn() { return; }
 
-    changeTableBackgroundColor(color) {
-        if (!this.currentEditingTable) return;
-        
-        let targetCell = null;
-        
-        // First try the last clicked table cell (most precise)
-        if (this.lastClickedTableCell && this.currentEditingTable.contains(this.lastClickedTableCell)) {
-            targetCell = this.lastClickedTableCell;
-        }
-        
-        // Then try the last hovered table cell
-        if (!targetCell && this.lastHoveredTableCell && this.currentEditingTable.contains(this.lastHoveredTableCell)) {
-            targetCell = this.lastHoveredTableCell;
-        }
-        
-        // Fallback to current mouse position
-        if (!targetCell && this.lastMousePosition) {
-            const elementUnderMouse = document.elementFromPoint(this.lastMousePosition.x, this.lastMousePosition.y);
-            if (elementUnderMouse) {
-                targetCell = elementUnderMouse.closest('td, th');
-                if (targetCell && !this.currentEditingTable.contains(targetCell)) {
-                    targetCell = null;
-                }
-            }
-        }
-        
-        // Fallback to selection
-        if (!targetCell) {
-            const selection = window.getSelection();
-            if (selection.rangeCount > 0) {
-                const range = selection.getRangeAt(0);
-                const container = range.startContainer;
-                const element = container.nodeType === Node.ELEMENT_NODE ? container : container.parentElement;
-                targetCell = element.closest('td, th');
-                if (targetCell && !this.currentEditingTable.contains(targetCell)) {
-                    targetCell = null;
-                }
-            }
-        }
-        
-        // Apply color to the target cell
-        if (targetCell) {
-            targetCell.style.backgroundColor = color;
-            // Add visual feedback
-            targetCell.style.transition = 'background-color 0.2s ease';
-        }
-        
-        this.saveState();
-        this.updateLastModified();
-        this.autoSaveToLocalStorage();
-        this.lastAction = 'Couleur de fond de tableau ajustée';
-    }
+    changeTableBackgroundColor(color) { return; }
 
-    showTableProperties() {
-        if (!this.currentEditingTable) return;
-        
-        const currentBorder = this.currentEditingTable.style.border || '1px solid #ddd';
-        const currentWidth = this.currentEditingTable.style.width || '100%';
-        
-        const border = prompt('Bordure du tableau (ex: 1px solid #000):', currentBorder);
-        const width = prompt('Largeur du tableau (ex: 100%, 500px):', currentWidth);
-        
-        if (border !== null) {
-            this.currentEditingTable.style.border = border;
-        }
-        if (width !== null) {
-            this.currentEditingTable.style.width = width;
-        }
-        
-        this.saveState();
-        this.updateLastModified();
-        this.autoSaveToLocalStorage();
-        this.lastAction = 'Propriétés de tableau ajustées';
-    }
+    showTableProperties() { return; }
     
     setupImageToolbar() {
         const toolbar = document.getElementById('imageToolbar');
@@ -2953,7 +3243,23 @@ class NewsletterEditor {
             tools.style.flexDirection = 'row';
             tools.style.alignItems = 'center';
             tools.style.gap = '10px';
-            tools.style.flexWrap = 'nowrap';
+            tools.style.flexWrap = 'wrap';
+        }
+        // Ensure icon buttons are fully clickable; allow wrap instead of horizontal scrollbar
+        const row = toolbar && toolbar.querySelector('.image-tools-row');
+        if (row) {
+            row.style.display = 'flex';
+            row.style.flexDirection = 'row';
+            row.style.alignItems = 'center';
+            row.style.gap = '10px';
+            row.style.flexWrap = 'wrap';
+            row.style.overflowX = 'visible';
+            row.style.whiteSpace = 'normal';
+            // Prevent children from expanding unevenly
+            const rowKids = row.querySelectorAll(':scope > *');
+            rowKids.forEach(k => {
+                k.style.flex = '0 0 auto';
+            });
         }
         
         // Convert toolbar controls to icon-only with tooltips, preserving behavior
@@ -2972,7 +3278,48 @@ class NewsletterEditor {
         toIconOnly(document.getElementById('rotationBtn'), '<i class="fas fa-sync"></i> <i class="fas fa-caret-down"></i>', 'Rotation');
         toIconOnly(document.getElementById('changeImageBtn'), '<i class="fas fa-image"></i>', "Changer l'image");
         toIconOnly(document.getElementById('linkImageBtn'), '<i class="fas fa-link"></i>', 'Lien');
-        
+
+        // Advanced gap (per-side) dropdown
+        const gapAdvBtn = document.getElementById('gapAdvancedBtn');
+        const gapAdvOptions = document.getElementById('gapAdvancedOptions');
+        if (gapAdvBtn && gapAdvOptions) {
+            gapAdvBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                gapAdvOptions.style.display = gapAdvOptions.style.display === 'none' ? 'block' : 'none';
+            });
+
+            const applyAdvancedGap = () => {
+                if (!this.currentEditingImage) return;
+                const w = this.currentEditingImage.closest('.image-wrapper');
+                if (!w) return;
+                const top = parseInt(document.getElementById('gapTopInput')?.value || '0', 10) || 0;
+                const right = parseInt(document.getElementById('gapRightInput')?.value || '0', 10) || 0;
+                const bottom = parseInt(document.getElementById('gapBottomInput')?.value || '0', 10) || 0;
+                const left = parseInt(document.getElementById('gapLeftInput')?.value || '0', 10) || 0;
+
+                if (w.classList.contains('position-inline')) {
+                    // Keep inline centering: only apply top/bottom, preserve auto sides
+                    w.style.marginTop = top + 'px';
+                    w.style.marginBottom = bottom + 'px';
+                    w.style.marginLeft = 'auto';
+                    w.style.marginRight = 'auto';
+                } else {
+                    // Floats/absolute: apply full per-side margins
+                    w.style.margin = `${top}px ${right}px ${bottom}px ${left}px`;
+                }
+                try { this.saveState(); this.lastAction = 'Espacement personnalisé appliqué'; } catch (_) {}
+            };
+
+            const applyBtn = document.getElementById('applyGapBtn');
+            if (applyBtn) {
+                applyBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    applyAdvancedGap();
+                    gapAdvOptions.style.display = 'none';
+                });
+            }
+        }
+
         // Rotation dropdown toggle
         document.getElementById('rotationBtn').addEventListener('click', (e) => {
             e.stopPropagation(); // Prevent event from bubbling up
@@ -3186,14 +3533,7 @@ class NewsletterEditor {
             positionOptions.style.display = positionOptions.style.display === 'none' ? 'block' : 'none';
         });
         
-        // Free position
-        document.getElementById('freePositionBtn').addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent event from bubbling up
-            if (this.currentEditingImage) {
-                this.setImagePosition('absolute');
-                document.getElementById('positionOptions').style.display = 'none';
-            }
-        });
+        // Free position removed: no listener wiring to avoid enabling absolute drag
         
         // Float left
         document.getElementById('floatLeftBtn').addEventListener('click', (e) => {
@@ -3234,6 +3574,14 @@ class NewsletterEditor {
                 !rotationOptions.contains(e.target)) {
                 rotationOptions.style.display = 'none';
             }
+
+            // Close advanced gap dropdown
+            const gapAdvBtnEl = document.getElementById('gapAdvancedBtn');
+            const gapAdvOptsEl = document.getElementById('gapAdvancedOptions');
+            if (gapAdvOptsEl && gapAdvOptsEl.style.display === 'block' && gapAdvBtnEl &&
+                !gapAdvBtnEl.contains(e.target) && !gapAdvOptsEl.contains(e.target)) {
+                gapAdvOptsEl.style.display = 'none';
+            }
             
             // Handle position dropdown
             const positionOptions = document.getElementById('positionOptions');
@@ -3250,28 +3598,44 @@ class NewsletterEditor {
     
     rotateImage(degrees) {
         if (!this.currentEditingImage) return;
-        
-        // Read current rotation from CSS transform
-        let currentRotation = 0;
-        const transform = this.currentEditingImage.style.transform || '';
-        const match = transform.match(/rotate\((-?\d+)deg\)/);
-        if (match) {
-            currentRotation = parseInt(match[1]);
+        // Resolve the actual IMG element in case a link or wrapper was selected
+        let imgEl = this.currentEditingImage;
+        if (imgEl && imgEl.tagName && imgEl.tagName.toUpperCase() !== 'IMG') {
+            try {
+                const inner = imgEl.querySelector && imgEl.querySelector('img');
+                if (inner) imgEl = inner;
+            } catch (_) {}
         }
-        
-        // Compute new rotation
-        const newRotation = (currentRotation + degrees) % 360;
-        
-        // Preserve other transforms by removing existing rotate() then appending a new one
-        let baseTransform = transform.replace(/rotate\((-?\d+)deg\)/, '').trim();
-        const finalTransform = (baseTransform ? baseTransform + ' ' : '') + `rotate(${newRotation}deg)`;
-        this.currentEditingImage.style.transform = finalTransform;
-        
+        if (!imgEl || (imgEl.tagName && imgEl.tagName.toUpperCase() !== 'IMG')) return;
+
+        // Read current rotation from data attribute (robust even if transform is a matrix)
+        let currentRotation = 0;
+        if (imgEl.dataset && imgEl.dataset.rotationDegrees) {
+            currentRotation = parseInt(imgEl.dataset.rotationDegrees) || 0;
+        } else {
+            const inline = imgEl.style && imgEl.style.transform || '';
+            const m = inline.match(/rotate\((-?\d+)deg\)/);
+            if (m) currentRotation = parseInt(m[1]) || 0;
+        }
+
+        // Compute and store new rotation
+        const newRotation = ((currentRotation + degrees) % 360 + 360) % 360;
+        if (imgEl.dataset) imgEl.dataset.rotationDegrees = String(newRotation);
+
+        // Preserve other inline transforms by stripping any rotate() then appending
+        const existing = imgEl.style && imgEl.style.transform ? imgEl.style.transform : '';
+        const base = existing.replace(/rotate\((-?\d+)deg\)/, '').trim();
+        const finalTransform = (base ? base + ' ' : '') + `rotate(${newRotation}deg)`;
+        imgEl.style.transform = finalTransform;
+        imgEl.style.transformOrigin = 'center center';
+
         // Persist state and refresh handles
-        this.saveState();
-        this.lastAction = 'Image tournée';
-        this.removeResizeHandles();
-        this.addResizeHandlesToImage(this.currentEditingImage);
+        try {
+            this.saveState();
+            this.lastAction = 'Image tournée';
+            this.removeResizeHandles();
+            this.addResizeHandlesToImage(imgEl);
+        } catch (_) {}
     }
     
     // Central entry-point used by click handlers to activate the floating image tools
@@ -3289,50 +3653,52 @@ class NewsletterEditor {
     
     flipImage(direction) {
         if (!this.currentEditingImage) return;
-        
-        // Create a canvas to perform the flip
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        // Make sure the image is loaded
-        const img = new Image();
-        img.onload = () => {
-            // Set canvas dimensions
-            canvas.width = img.width;
-            canvas.height = img.height;
-            
-            // Save the context state
-            ctx.save();
-            
-            // Flip the context
-            if (direction === 'horizontal') {
-                ctx.translate(canvas.width, 0);
-                ctx.scale(-1, 1);
-            } else if (direction === 'vertical') {
-                ctx.translate(0, canvas.height);
-                ctx.scale(1, -1);
-            }
-            
-            // Draw the flipped image
-            ctx.drawImage(img, 0, 0);
-            
-            // Restore the context state
-            ctx.restore();
-            
-            // Apply the flipped image
-            const flippedImageDataUrl = canvas.toDataURL('image/png');
-            this.currentEditingImage.src = flippedImageDataUrl;
-            
+        // Resolve the actual IMG element
+        let imgEl = this.currentEditingImage;
+        if (imgEl && imgEl.tagName && imgEl.tagName.toUpperCase() !== 'IMG') {
+            try {
+                const inner = imgEl.querySelector && imgEl.querySelector('img');
+                if (inner) imgEl = inner;
+            } catch (_) {}
+        }
+        if (!imgEl || (imgEl.tagName && imgEl.tagName.toUpperCase() !== 'IMG')) return;
+
+        // Track flip state in data attributes so repeated clicks toggle correctly
+        const flipX = direction === 'horizontal';
+        const flipY = direction === 'vertical';
+        const currentFlipX = imgEl.dataset && imgEl.dataset.flipX === '1';
+        const currentFlipY = imgEl.dataset && imgEl.dataset.flipY === '1';
+
+        let newFlipX = currentFlipX;
+        let newFlipY = currentFlipY;
+        if (flipX) newFlipX = !currentFlipX;
+        if (flipY) newFlipY = !currentFlipY;
+        if (imgEl.dataset) {
+            imgEl.dataset.flipX = newFlipX ? '1' : '0';
+            imgEl.dataset.flipY = newFlipY ? '1' : '0';
+        }
+
+        // Build transform: preserve existing non-flip transforms (e.g., rotate, scale) by stripping previous scaleX/scaleY flips
+        const existing = imgEl.style && imgEl.style.transform ? imgEl.style.transform : '';
+        const base = existing
+            .replace(/scaleX\((-?\d*\.?\d+)\)/g, '')
+            .replace(/scaleY\((-?\d*\.?\d+)\)/g, '')
+            .replace(/\s{2,}/g, ' ')
+            .trim();
+
+        const flips = [];
+        if (newFlipX) flips.push('scaleX(-1)');
+        if (newFlipY) flips.push('scaleY(-1)');
+        const finalTransform = (flips.join(' ') + ' ' + base).trim();
+        imgEl.style.transform = finalTransform || 'none';
+        imgEl.style.transformOrigin = 'center center';
+
+        try {
             this.saveState();
             this.lastAction = 'Image retournée';
-            
-            // Refresh the resize handles
             this.removeResizeHandles();
-            this.addResizeHandlesToImage(this.currentEditingImage);
-        };
-        
-        // Set the source to trigger the onload event
-        img.src = this.currentEditingImage.src;
+            this.addResizeHandlesToImage(imgEl);
+        } catch (_) {}
     }
     
     showImageEditingTools(image) {
@@ -3343,11 +3709,9 @@ class NewsletterEditor {
         this.originalImageWidth = image.naturalWidth;
         this.originalImageHeight = image.naturalHeight;
         
-        // Store original image source for reset functionality
-        if (!this.originalImageSrc) {
-            // Use the data attribute if available, otherwise use current src
-            this.originalImageSrc = image.dataset.originalSrc || image.src;
-        }
+        // Store original image source for reset functionality (refresh per selection)
+        // Use the data attribute if available, otherwise use current src
+        this.originalImageSrc = image.dataset.originalSrc || image.src;
         
         // Add a class to highlight the image being edited
         image.classList.add('image-being-edited');
@@ -3477,7 +3841,10 @@ class NewsletterEditor {
 
         // Ensure wrapper positioning
         if (!isInGallery) {
-            wrapper.style.position = 'relative';
+            // Do not override absolute positioning
+            if (!wrapper.classList.contains('position-absolute')) {
+                wrapper.style.position = 'relative';
+            }
             // Keep existing layout for absolute/float/inline modes; only default to inline-block otherwise
             const keepDisplay = wrapper.classList.contains('position-inline') ||
                                 wrapper.classList.contains('position-absolute') ||
@@ -3741,6 +4108,16 @@ class NewsletterEditor {
         // Apply the new position type
         switch (positionType) {
             case 'absolute':
+                // Compute current on-screen position BEFORE changing layout
+                let anchor = null;
+                try {
+                    anchor = wrapper.closest('.column') || wrapper.closest('.newsletter-section') || document.getElementById('editableContent');
+                } catch (_) {
+                    anchor = document.getElementById('editableContent');
+                }
+                const preRect = wrapper.getBoundingClientRect();
+                const containerRect = anchor ? anchor.getBoundingClientRect() : { left: 0, top: 0 };
+
                 // Set up for absolute positioning
                 resetWrapperLayout();
                 wrapper.classList.add('position-absolute');
@@ -3748,18 +4125,13 @@ class NewsletterEditor {
                 // Make wrapper size to content for free movement
                 wrapper.style.width = 'auto';
 
-                // Ensure the editable container is the positioning context
-                const editableEl = document.getElementById('editableContent');
-                if (editableEl && getComputedStyle(editableEl).position === 'static') {
-                    editableEl.style.position = 'relative';
+                // Ensure same anchoring in preview by setting inline position on the anchor
+                if (anchor && getComputedStyle(anchor).position === 'static') {
+                    anchor.style.position = 'relative';
                 }
-
-                // Compute position relative to the editable container so the image stays inside
-                const rect = wrapper.getBoundingClientRect();
-                const containerRect = editableEl ? editableEl.getBoundingClientRect() : { left: 0, top: 0, width: 0, height: 0 };
-                const relLeft = Math.max(0, rect.left - containerRect.left);
-                const relTop = Math.max(0, rect.top - containerRect.top);
-
+                // Apply left/top based on pre-change coordinates relative to anchor
+                const relLeft = Math.max(0, preRect.left - containerRect.left);
+                const relTop = Math.max(0, preRect.top - containerRect.top);
                 wrapper.style.left = relLeft + 'px';
                 wrapper.style.top = relTop + 'px';
                 wrapper.style.zIndex = '1';
@@ -3866,9 +4238,28 @@ class NewsletterEditor {
         
         // Store initial position for drag operation
         let startX, startY, startLeft, startTop;
+        // Anchor container used for bounds (column -> section -> editableContent)
+        let anchorEl = null;
         
         // Add drag start event
         const dragStartHandler = (e) => {
+            // Resolve anchor container for precise bounds
+            try {
+                anchorEl = wrapper.closest('.column') || wrapper.closest('.newsletter-section') || document.getElementById('editableContent');
+            } catch (_) {
+                anchorEl = document.getElementById('editableContent');
+            }
+            if (anchorEl && getComputedStyle(anchorEl).position === 'static') {
+                anchorEl.style.position = 'relative';
+            }
+            if (anchorEl) {
+                // Ensure the image can move beyond current text height
+                anchorEl.style.overflow = 'visible';
+                // Prime a minimal height to prevent immediate clipping
+                const primed = Math.max(anchorEl.scrollHeight, wrapper.offsetTop + wrapper.offsetHeight + 16);
+                anchorEl.style.minHeight = primed + 'px';
+            }
+
             // Store the initial position
             startX = e.clientX;
             startY = e.clientY;
@@ -3943,13 +4334,26 @@ class NewsletterEditor {
             let nextLeft = startLeft + dx;
             let nextTop = startTop + dy;
 
-            // Constrain to editable content if in absolute mode
-            const editableEl = document.getElementById('editableContent');
-            if (wrapper.classList.contains('position-absolute') && editableEl) {
-                const maxLeft = Math.max(0, editableEl.clientWidth - wrapper.offsetWidth);
-                const maxTop = Math.max(0, editableEl.clientHeight - wrapper.offsetHeight);
-                nextLeft = Math.min(Math.max(0, nextLeft), maxLeft);
-                nextTop = Math.min(Math.max(0, nextTop), maxTop);
+            // Constrain to anchor bounds if in absolute mode
+            if (wrapper.classList.contains('position-absolute')) {
+                const container = anchorEl || document.getElementById('editableContent');
+                if (container) {
+                    const cRect = container.getBoundingClientRect();
+                    const maxLeft = Math.max(0, cRect.width - wrapper.offsetWidth);
+                    // Use current max of visual height and scrollHeight to allow dragging below current text
+                    const effectiveHeight = Math.max(cRect.height, container.scrollHeight);
+                    let maxTop = Math.max(0, effectiveHeight - wrapper.offsetHeight);
+                    nextLeft = Math.min(Math.max(0, nextLeft), maxLeft);
+                    nextTop = Math.max(0, nextTop);
+                    // Expand container min-height when dragging lower
+                    const needed = nextTop + wrapper.offsetHeight + 16;
+                    if (needed > (parseInt(container.style.minHeight) || 0)) {
+                        container.style.minHeight = needed + 'px';
+                        // Recompute maxTop after expanding
+                        maxTop = Math.max(0, Math.max(container.getBoundingClientRect().height, container.scrollHeight) - wrapper.offsetHeight);
+                    }
+                    nextTop = Math.min(nextTop, maxTop);
+                }
             }
 
             wrapper.style.left = nextLeft + 'px';
@@ -4467,6 +4871,12 @@ class NewsletterEditor {
             // Replace the original image with the cropped version
             const croppedImageDataUrl = canvas.toDataURL('image/png');
             
+            // If the image had an explicit fixed height before cropping, reset it to preserve aspect ratio
+            const hadFixedHeight = this.currentEditingImage && this.currentEditingImage.style && this.currentEditingImage.style.height && this.currentEditingImage.style.height !== '' && this.currentEditingImage.style.height !== 'auto';
+            // Preserve current width (prefer explicit style width; fallback to current rendered width)
+            const preservedStyleWidth = this.currentEditingImage && this.currentEditingImage.style ? this.currentEditingImage.style.width : '';
+            const preservedRenderedWidth = this.currentEditingImage ? this.currentEditingImage.offsetWidth : null;
+
             // Store the new image as the original for future resizing
             const newImg = new Image();
             newImg.onload = () => {
@@ -4478,6 +4888,32 @@ class NewsletterEditor {
                 const resizePercentage = document.getElementById('resizePercentage');
                 if (resizeSlider) resizeSlider.value = 100;
                 if (resizePercentage) resizePercentage.textContent = '100%';
+
+                // After the actual <img> element loads the cropped data, adjust styles to avoid deformation
+                if (this.currentEditingImage) {
+                    // Attach a one-time onload to ensure dimensions are applied after the new data URL is rendered
+                    const imgEl = this.currentEditingImage;
+                    const applyDimensionFix = () => {
+                        try {
+                            if (hadFixedHeight) {
+                                // Keep width as-is (style if set, otherwise preserve current rendered px width), and reset height to auto
+                                if (preservedStyleWidth && preservedStyleWidth.trim() !== '') {
+                                    imgEl.style.width = preservedStyleWidth;
+                                } else if (preservedRenderedWidth && !isNaN(preservedRenderedWidth)) {
+                                    imgEl.style.width = preservedRenderedWidth + 'px';
+                                }
+                                imgEl.style.height = 'auto';
+                            }
+                            // Explicitly remove rounded corners and shadow after crop
+                            imgEl.style.borderRadius = '0';
+                            imgEl.style.boxShadow = 'none';
+                        } catch (_) {}
+                        // remove handler
+                        try { imgEl.onload = null; } catch (_) {}
+                    };
+                    // If the image might load instantly, set the handler before changing src below
+                    imgEl.onload = applyDimensionFix;
+                }
             };
             newImg.src = croppedImageDataUrl;
             
@@ -4494,7 +4930,10 @@ class NewsletterEditor {
             this.lastAction = 'Image recadrée';
         } catch (error) {
             console.error('Error during image cropping:', error);
-            alert('Une erreur est survenue lors du recadrage de l\'image. Veuillez réessayer.');
+            const msg = (error && (error.name || '')).toLowerCase().includes('security') || (String(error || '').toLowerCase().includes('tainted'))
+                ? "Impossible de recadrer cette image car elle provient d'un domaine externe sans autorisation (CORS). Téléchargez l'image localement ou utilisez une image hébergée avec CORS activé, puis réessayez."
+                : "Une erreur est survenue lors du recadrage de l'image. Veuillez réessayer.";
+            alert(msg);
             this.cancelImageCropping();
         }
     }
@@ -4556,6 +4995,19 @@ class NewsletterEditor {
 
     insertImage(src, altText) {
         const img = document.createElement('img');
+        // If inserting a remote URL image, attempt CORS-safe loading to support cropping
+        try {
+            const isHttp = /^https?:\/\//i.test(src);
+            if (isHttp) {
+                // Only set crossOrigin for cross-origin URLs
+                const a = document.createElement('a');
+                a.href = src;
+                if (a.host && a.host !== window.location.host) {
+                    img.crossOrigin = 'anonymous';
+                    img.referrerPolicy = 'no-referrer';
+                }
+            }
+        } catch (_) {}
         img.src = src;
         img.alt = altText;
         try {
@@ -4632,10 +5084,10 @@ class NewsletterEditor {
         } catch (_) { /* no-op */ }
         
         // Add delete button click event
-        deleteBtn.addEventListener('click', (e) => {
+        deleteBtn.addEventListener('click', async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (confirm('Êtes-vous sûr de vouloir supprimer cette image ?')) {
+            if (await this.confirmWithCancel('Êtes-vous sûr de vouloir supprimer cette image ?')) {
                 this.deleteImageWrapperSafe(wrapper);
             }
         });
@@ -4670,40 +5122,102 @@ class NewsletterEditor {
             if (e.key === 'Delete' || e.key === 'Backspace') {
                 e.preventDefault();
                 e.stopPropagation();
-                if (confirm('Êtes-vous sûr de vouloir supprimer cette image ?')) {
-                    this.deleteImageWrapperSafe(wrapper);
-                }
+                (async () => { if (await this.confirmWithCancel('Êtes-vous sûr de vouloir supprimer cette image ?')) { this.deleteImageWrapperSafe(wrapper); } })();
             }
         });
         
         // Make wrapper focusable for keyboard events
         wrapper.setAttribute('tabindex', '0');
         
+        // Enable flow drag-to-reposition (not absolute move)
+        try { this.makeImageFlowReorderable(wrapper); } catch (_) {}
+
         this.insertElementAtCursor(wrapper);
+        // Immediately select the inserted image so floating tools (e.g., rotation) work
+        try { this.showImageEditingTools(img); } catch (_) {}
         this.saveState();
         this.lastAction = 'Image insérée';
     }
 
+    wrapVideoElementForEditing(mediaEl) {
+        if (!mediaEl) return null;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'video-align-wrapper';
+        wrapper.style.cssText = 'position: relative; display: block; margin: 0 auto; max-width: 100%;';
+        wrapper.setAttribute('tabindex', '0');
+        const handle = document.createElement('button');
+        handle.type = 'button';
+        handle.className = 'video-toolbar-handle';
+        handle.innerHTML = '<i class="fas fa-ellipsis-v"></i>';
+        handle.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.showVideoToolbar(mediaEl);
+        });
+        wrapper.addEventListener('click', (e) => {
+            if (e.target === wrapper) {
+                e.preventDefault();
+                this.showVideoToolbar(mediaEl);
+            }
+        });
+        wrapper.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.showVideoToolbar(mediaEl);
+            }
+        });
+        try {
+            mediaEl.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.showVideoToolbar(mediaEl);
+            });
+        } catch (_) {}
+        wrapper.appendChild(handle);
+        wrapper.appendChild(mediaEl);
+        return wrapper;
+    }
+
     insertVideo(url) {
-        let embedCode = '';
-        
-        if (url.includes('youtube.com') || url.includes('youtu.be')) {
-            const videoId = this.extractYouTubeId(url);
-            embedCode = `<iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen style="width:70%; margin: 10px auto; display:block; height:auto; aspect-ratio:16/9;"></iframe>`;
-        } else if (url.includes('vimeo.com')) {
-            const videoId = this.extractVimeoId(url);
-            embedCode = `<iframe src="https://player.vimeo.com/video/${videoId}" frameborder="0" allowfullscreen style="width:70%; margin: 10px auto; display:block; height:auto; aspect-ratio:16/9;"></iframe>`;
+        const trimmedUrl = (url || '').trim();
+        if (!trimmedUrl) return;
+        let mediaEl = null;
+        if (trimmedUrl.includes('youtube.com') || trimmedUrl.includes('youtu.be')) {
+            const videoId = this.extractYouTubeId(trimmedUrl);
+            const iframe = document.createElement('iframe');
+            iframe.src = videoId ? `https://www.youtube.com/embed/${videoId}` : trimmedUrl;
+            iframe.setAttribute('frameborder', '0');
+            iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+            iframe.allowFullscreen = true;
+            iframe.style.border = 'none';
+            mediaEl = iframe;
+        } else if (trimmedUrl.includes('vimeo.com')) {
+            const videoId = this.extractVimeoId(trimmedUrl);
+            const iframe = document.createElement('iframe');
+            iframe.src = videoId ? `https://player.vimeo.com/video/${videoId}` : trimmedUrl;
+            iframe.setAttribute('frameborder', '0');
+            iframe.setAttribute('allow', 'autoplay; fullscreen; picture-in-picture');
+            iframe.allowFullscreen = true;
+            iframe.style.border = 'none';
+            mediaEl = iframe;
         } else {
-            // Generic direct video URL (mp4/webm/ogg)
-            const typeGuess = url.toLowerCase().endsWith('.webm') ? 'video/webm' : (url.toLowerCase().endsWith('.ogv') || url.toLowerCase().endsWith('.ogg')) ? 'video/ogg' : 'video/mp4';
-            embedCode = `<video controls style="max-width: 100%; margin: 10px 0;"><source src="${url}" type="${typeGuess}">Votre navigateur ne supporte pas la vidéo.</video>`;
+            const video = document.createElement('video');
+            video.controls = true;
+            video.preload = 'metadata';
+            const source = document.createElement('source');
+            source.src = trimmedUrl;
+            const lower = trimmedUrl.toLowerCase();
+            if (lower.endsWith('.webm')) source.type = 'video/webm';
+            else if (lower.endsWith('.ogg') || lower.endsWith('.ogv')) source.type = 'video/ogg';
+            else source.type = 'video/mp4';
+            video.appendChild(source);
+            mediaEl = video;
         }
-        
-        this.insertHTMLAtCursor(embedCode);
+        if (!mediaEl) return;
+        const wrapper = this.wrapVideoElementForEditing(mediaEl);
+        this.insertElementAtCursor(wrapper || mediaEl);
+        this.normalizeVideoStyles(wrapper || mediaEl);
         this.saveState();
         this.lastAction = 'Vidéo insérée';
-
-        // If we inserted a <video> (not iframe), try to capture a poster immediately (can be disabled)
         if (!window.__disableVideoPoster) {
             try {
                 const host = document.getElementById('editableContent');
@@ -4729,7 +5243,6 @@ class NewsletterEditor {
                                 if (dataUrl) v.setAttribute('poster', dataUrl);
                             };
                             if (lastVideo.readyState >= 2) {
-                                // Seek a little to avoid black frames
                                 try { v.currentTime = Math.min(0.1, (v.seekable && v.seekable.length ? v.seekable.end(0) : 0.1)); } catch {}
                                 v.addEventListener('seeked', drawNow, { once: true });
                             } else {
@@ -4738,7 +5251,6 @@ class NewsletterEditor {
                                     v.addEventListener('seeked', drawNow, { once: true });
                                 }, { once: true });
                             }
-                            // Safety timeout
                             setTimeout(drawNow, 1500);
                         } catch { /* ignore */ }
                     };
@@ -4752,17 +5264,13 @@ class NewsletterEditor {
         const video = document.createElement('video');
         video.controls = true;
         video.preload = 'auto';
-        video.style.cssText = 'max-width: 100%; margin: 10px 0;';
-        // Keep the original name so preview and editor can resolve to media/<name>
         if (name) {
             try { video.setAttribute('data-local-filename', String(name)); } catch (_) {}
         }
-        // Build a persistent media source first so it survives refresh
         const persistent = document.createElement('source');
         const safeName = String(name || '').replace(/^[\\\/]+/, '');
         const mediaPath = safeName ? ('media/' + encodeURIComponent(safeName)) : '';
         if (mediaPath) persistent.src = mediaPath;
-        // Default type hint
         try {
             const lower = String(name || '').toLowerCase();
             if (lower.endsWith('.mp4')) persistent.type = 'video/mp4';
@@ -4771,9 +5279,8 @@ class NewsletterEditor {
         } catch (_) {}
         if (mediaPath) video.appendChild(persistent);
 
-        // Add the temporary blob source for immediate playback in the current session
         const blobSource = document.createElement('source');
-        blobSource.src = src; // blob URL
+        blobSource.src = src;
         if (name) {
             try { blobSource.setAttribute('data-local-filename', String(name)); } catch (_) {}
         }
@@ -4785,11 +5292,12 @@ class NewsletterEditor {
         } catch (_) {}
         video.appendChild(blobSource);
 
-        this.insertElementAtCursor(video);
+        const wrapper = this.wrapVideoElementForEditing(video);
+        this.insertElementAtCursor(wrapper || video);
+        this.normalizeVideoStyles(wrapper || video);
         this.saveState();
         this.lastAction = 'Vidéo insérée';
 
-        // Generate a poster immediately from the live video element (can be disabled)
         if (!window.__disableVideoPoster) {
             try {
                 const ensurePoster = (v) => {
@@ -4856,57 +5364,7 @@ class NewsletterEditor {
         return match ? match[1] : null;
     }
 
-    insertTable() {
-        const rows = prompt('Nombre de lignes:', '3');
-        const cols = prompt('Nombre de colonnes:', '3');
-        
-        if (rows && cols) {
-            const table = document.createElement('table');
-            table.style.cssText = 'width: 100%; border-collapse: collapse; margin: 20px 0;';
-            
-            // Local helper: clear default cell label on first focus/click
-            const attachCellClear = (cell, expectedText) => {
-                const clear = () => {
-                    try {
-                        if (cell.dataset.cleared) return;
-                        const current = (cell.innerText || cell.textContent || '').trim();
-                        if (current !== expectedText) return;
-                        // Preserve formatting context
-                        cell.innerHTML = '<br>';
-                        cell.dataset.cleared = '1';
-                        const range = document.createRange();
-                        range.selectNodeContents(cell);
-                        range.collapse(true);
-                        const sel = window.getSelection();
-                        sel.removeAllRanges();
-                        sel.addRange(range);
-                        try { cell.focus(); } catch (_) {}
-                    } catch (_) { /* no-op */ }
-                };
-                cell.addEventListener('focus', clear);
-                cell.addEventListener('click', clear);
-            };
-            
-            for (let i = 0; i < parseInt(rows); i++) {
-                const row = document.createElement('tr');
-                for (let j = 0; j < parseInt(cols); j++) {
-                    const cell = document.createElement(i === 0 ? 'th' : 'td');
-                    cell.contentEditable = true;
-                    cell.style.cssText = 'border: 1px solid #ddd; padding: 8px; text-align: left;';
-                    const defaultLabel = i === 0 ? `En-tête ${j + 1}` : `Cellule ${i},${j + 1}`;
-                    cell.textContent = defaultLabel;
-                    // Attach clear-on-first-focus/click like other sections
-                    attachCellClear(cell, defaultLabel);
-                    row.appendChild(cell);
-                }
-                table.appendChild(row);
-            }
-            
-            this.insertElementAtCursor(table);
-            this.saveState();
-            this.lastAction = 'Tableau inséré';
-        }
-    }
+    insertTable() { return; }
 
     insertArticleSection() {
         const articleSection = document.createElement('div');
@@ -5197,6 +5655,130 @@ class NewsletterEditor {
         const reader = new FileReader();
         reader.onload = (e) => handleLoaded(e.target.result);
         reader.readAsDataURL(file);
+    }
+
+    insertMultiImagesSection() {
+        const section = document.createElement('div');
+        section.className = 'newsletter-section multi-images-section';
+
+        section.innerHTML = `
+            <div class="multi-grid">
+                <div class="multi-item multi-add">
+                    <i class="fas fa-plus"></i>
+                    <p>Ajouter des images</p>
+                </div>
+            </div>
+            <input type="file" class="multi-upload" accept="image/*" multiple style="display:none;" />
+        `;
+
+        const grid = section.querySelector('.multi-grid');
+        const addTile = section.querySelector('.multi-add');
+        const input = section.querySelector('.multi-upload');
+
+        // Columns by count: 1/2/3 columns based on number of images
+        const updateColumns = () => {
+            const items = grid.querySelectorAll('.multi-item:not(.multi-add)');
+            const count = items.length;
+            const cols = Math.min(Math.max(count, 1), 3);
+            grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+            items.forEach(it => { it.style.gridColumn = ''; it.style.gridRowEnd = ''; });
+            try { addTile.style.display = (count > 0) ? 'none' : 'flex'; } catch (_) {}
+            try { section.classList.toggle('has-items', count > 0); } catch (_) {}
+        };
+
+        const attachObservers = (item, mediaEl) => {
+            try {
+                if (mediaEl) mediaEl.addEventListener('load', () => updateColumns(), { once: false });
+                if (window.ResizeObserver) {
+                    const ro = new ResizeObserver(() => updateColumns());
+                    ro.observe(item);
+                }
+            } catch (_) {}
+        };
+
+        const pick = () => input.click();
+        addTile.addEventListener('click', pick);
+
+        input.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files || []);
+            if (!files.length) return;
+            files.forEach(f => {
+                if (f.type && f.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        const card = document.createElement('div');
+                        card.className = 'multi-item';
+                        card.contentEditable = false;
+
+                        const img = document.createElement('img');
+                        img.src = ev.target.result;
+                        img.alt = f.name || 'Image';
+                        img.draggable = false;
+                        img.addEventListener('click', (ev2) => { ev2.stopPropagation(); try { this.showImageEditingTools(img); } catch (_) {} });
+                        // Auto-assign tall variant based on intrinsic dimensions
+                        img.addEventListener('load', () => {
+                            try {
+                                const nh = img.naturalHeight || 0;
+                                const nw = img.naturalWidth || 0;
+                                if (nh >= 900 || (nw > 0 && nh / nw > 1.2)) {
+                                    card.classList.add('tall');
+                                }
+                            } catch (_) {}
+                            updateColumns();
+                        });
+
+                        const del = document.createElement('button');
+                        del.className = 'multi-delete';
+                        del.setAttribute('type', 'button');
+                        del.innerHTML = '<i class="fas fa-times"></i>';
+                        del.addEventListener('click', (evd) => {
+                            evd.stopPropagation();
+                            if (card && card.parentNode) {
+                                card.parentNode.removeChild(card);
+                                updateColumns();
+                                // If no images remain, show the add placeholder again
+                                try {
+                                    const remaining = grid.querySelectorAll('.multi-item:not(.multi-add)').length;
+                                    if (remaining === 0) addTile.style.display = 'flex';
+                                } catch (_) {}
+                                this.saveState();
+                                this.lastAction = 'Image multi supprimée';
+                            }
+                        });
+
+                        const addInline = document.createElement('button');
+                        addInline.className = 'multi-add-inline';
+                        addInline.setAttribute('type', 'button');
+                        addInline.title = 'Ajouter des images';
+                        addInline.setAttribute('aria-label', 'Ajouter des images');
+                        addInline.innerHTML = '<i class="fas fa-image"></i>';
+                        addInline.addEventListener('click', (eai) => { eai.stopPropagation(); pick(); });
+
+                        card.appendChild(img);
+                        card.appendChild(del);
+                        card.appendChild(addInline);
+                        grid.insertBefore(card, addTile);
+                        attachObservers(card, img);
+                        updateColumns();
+                        this.saveState();
+                        this.lastAction = 'Images multi ajoutées';
+                    };
+                    reader.readAsDataURL(f);
+                }
+            });
+            input.value = '';
+            updateColumns();
+        });
+
+        this.insertElementAtCursor(section);
+        this.saveState();
+        try { this.showSectionToolbar(section); } catch (_) {}
+        document.getElementById('sectionOptions').style.display = 'none';
+        this.lastAction = 'Section multi images insérée';
+
+        // Initial layout
+        updateColumns();
+        window.addEventListener('resize', () => updateColumns());
     }
     
     // Helper method to handle drag over for gallery items
@@ -5830,6 +6412,72 @@ class NewsletterEditor {
         }
     }
 
+    async confirmWithCancel(message) {
+        return new Promise((resolve) => {
+            try {
+                let overlay = document.getElementById('kyo-confirm-overlay');
+                if (!overlay) {
+                    overlay = document.createElement('div');
+                    overlay.id = 'kyo-confirm-overlay';
+                    overlay.style.position = 'fixed';
+                    overlay.style.inset = '0';
+                    overlay.style.background = 'rgba(0,0,0,0.35)';
+                    overlay.style.display = 'flex';
+                    overlay.style.alignItems = 'center';
+                    overlay.style.justifyContent = 'center';
+                    overlay.style.zIndex = '99999';
+                    const modal = document.createElement('div');
+                    modal.id = 'kyo-confirm-modal';
+                    modal.style.background = '#fff';
+                    modal.style.borderRadius = '8px';
+                    modal.style.boxShadow = '0 10px 25px rgba(0,0,0,0.2)';
+                    modal.style.width = 'min(420px, 92vw)';
+                    modal.style.maxWidth = '92vw';
+                    modal.style.padding = '16px';
+                    modal.style.fontFamily = 'inherit';
+                    const msg = document.createElement('div');
+                    msg.id = 'kyo-confirm-message';
+                    msg.style.margin = '8px 0 16px 0';
+                    msg.style.color = '#333';
+                    msg.style.fontSize = '14px';
+                    const actions = document.createElement('div');
+                    actions.style.display = 'flex';
+                    actions.style.justifyContent = 'flex-end';
+                    actions.style.gap = '8px';
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.textContent = 'Annuler';
+                    cancelBtn.style.padding = '8px 12px';
+                    cancelBtn.style.border = '1px solid #ddd';
+                    cancelBtn.style.background = '#fff';
+                    cancelBtn.style.borderRadius = '6px';
+                    const okBtn = document.createElement('button');
+                    okBtn.textContent = 'Supprimer';
+                    okBtn.style.padding = '8px 12px';
+                    okBtn.style.border = 'none';
+                    okBtn.style.background = '#dc3545';
+                    okBtn.style.color = '#fff';
+                    okBtn.style.borderRadius = '6px';
+                    actions.appendChild(cancelBtn);
+                    actions.appendChild(okBtn);
+                    modal.appendChild(msg);
+                    modal.appendChild(actions);
+                    overlay.appendChild(modal);
+                    document.body.appendChild(overlay);
+                }
+                const msgEl = overlay.querySelector('#kyo-confirm-message');
+                if (msgEl) msgEl.textContent = message || '';
+                overlay.style.display = 'flex';
+                const cleanup = () => { overlay.style.display = 'none'; };
+                const onCancel = () => { cleanup(); resolve(false); };
+                const onOk = () => { cleanup(); resolve(true); };
+                const cancelBtn = overlay.querySelector('button:nth-of-type(1)');
+                const okBtn = overlay.querySelector('button:nth-of-type(2)');
+                cancelBtn.onclick = onCancel;
+                okBtn.onclick = onOk;
+            } catch (_) { resolve(false); }
+        });
+    }
+
     async save() {
         try {
             console.log('Save method called');
@@ -5849,6 +6497,99 @@ class NewsletterEditor {
             // Create a temporary div to clean up the content
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = content;
+            // Pre-save validation: check for 52px and 22px font sizes and image filenames starting with 'article'
+            try {
+                const allEls = tempDiv.querySelectorAll('*');
+                let has52 = false;
+                let has22 = false;
+                for (const el of allEls) {
+                    const styleAttr = (el.getAttribute && el.getAttribute('style')) || '';
+                    if (!has52 && /font-size\s*:\s*52px/i.test(styleAttr)) has52 = true;
+                    if (!has22 && /font-size\s*:\s*22px/i.test(styleAttr)) has22 = true;
+                    if (el.style) {
+                        const fs = (el.style.fontSize || '').toLowerCase();
+                        if (!has52 && fs === '52px') has52 = true;
+                        if (!has22 && fs === '22px') has22 = true;
+                    }
+                    if (has52 && has22) break;
+                }
+                let conformingImageCount = 0;
+                tempDiv.querySelectorAll('img').forEach(img => {
+                    const src = (img.getAttribute('src') || '').trim();
+                    if (!src) return;
+                    try {
+                        // Prefer filename from URL when not data/blob
+                        if (!/^(data:|blob:)/i.test(src)) {
+                            const clean = src.split('?')[0].split('#')[0];
+                            const parts = clean.split(/[\/\\]/);
+                            const name = (parts[parts.length - 1] || '').toLowerCase();
+                            if (/^article\d+/i.test(name)) { conformingImageCount++; return; }
+                        }
+                        // For data/blob or when URL doesn't encode the name, try attributes
+                        const candidates = [
+                            img.getAttribute('data-filename'),
+                            img.getAttribute('data-original-name'),
+                            img.getAttribute('data-name'),
+                            img.getAttribute('data-original-src'),
+                            img.getAttribute('alt'),
+                            img.getAttribute('title')
+                        ];
+                        for (const c of candidates) {
+                            const v = (c || '').trim();
+                            if (!v) continue;
+                            const parts2 = v.split(/[\/\\]/);
+                            const base = (parts2[parts2.length - 1] || '').toLowerCase();
+                            if (/^article\d+/i.test(base)) { conformingImageCount++; return; }
+                        }
+                    } catch (_) { /* ignore */ }
+                });
+                // Validate video sources as well
+                const badVideos = [];
+                let skippedFirstVideoElement = false; // exempt the entire first <video> element
+                tempDiv.querySelectorAll('video').forEach(vid => {
+                    if (!skippedFirstVideoElement) { skippedFirstVideoElement = true; return; }
+                    const vsrc = (vid.getAttribute('src') || '').trim();
+                    if (vsrc && !/^(data:|blob:)/i.test(vsrc)) {
+                        try {
+                            const clean = vsrc.split('?')[0].split('#')[0];
+                            const parts = clean.split(/[\/\\]/);
+                            const name = (parts[parts.length - 1] || '').toLowerCase();
+                            const ok = /^article\d+/i.test(name);
+                            if (!ok) badVideos.push(name || vsrc);
+                        } catch (_) { /* ignore */ }
+                    }
+                    // Also check nested <source> tags
+                    vid.querySelectorAll('source[src]').forEach(srcEl => {
+                        const s = (srcEl.getAttribute('src') || '').trim();
+                        if (!s || /^(data:|blob:)/i.test(s)) return;
+                        try {
+                            const clean = s.split('?')[0].split('#')[0];
+                            const parts = clean.split(/[\/\\]/);
+                            const name = (parts[parts.length - 1] || '').toLowerCase();
+                            const ok = /^article\d+/i.test(name);
+                            if (!ok) badVideos.push(name || s);
+                        } catch (_) { /* ignore */ }
+                    });
+                });
+                const problems = [];
+                // New rule set:
+                // 1) must have 52px title AND 22px subtitle
+                // 2) must have EITHER at least one image named articleN OR at least one video (local <video> or known video iframe)
+                const videoTagCount = tempDiv.querySelectorAll('video').length;
+                const iframeVideoCount = Array.from(tempDiv.querySelectorAll('iframe[src]'))
+                    .filter(ifr => /(?:youtube\.com|youtu\.be|vimeo\.com|dailymotion\.com|player\.wistia\.net|loom\.com)/i
+                        .test((ifr.getAttribute('src') || ''))).length;
+                const hasAnyVideo = (videoTagCount + iframeVideoCount) > 0;
+                if (!has52) problems.push("titre 52px manquant");
+                if (!has22) problems.push("sous-titre 22px manquant");
+                if (!(conformingImageCount >= 1 || hasAnyVideo)) {
+                    problems.push("au moins une image 'articleN' ou une vidéo requise");
+                }
+                if (problems.length) {
+                    alert('Validation avant sauvegarde échouée:\n' + problems.join('\n'));
+                    return; // Abort save
+                }
+            } catch (_) { /* if validation crashes, do not block save */ }
             console.log('Content extracted for saving');
 
             let imageSummaryText = '';
@@ -6164,39 +6905,77 @@ class NewsletterEditor {
             // Try to use the File System Access API (modern browsers)
             if (window.showSaveFilePicker) {
                 try {
-                    const fileHandle = await window.showSaveFilePicker({
-                        suggestedName: `${fileName.replace(/[^\w\-.]/g, '_')}.html`,
-                        types: [{
-                            description: 'Fichier HTML',
-                            accept: { 'text/html': ['.html'] }
-                        }]
-                    });
-                    
-                    const writable = await fileHandle.createWritable();
+                    let chosenHandle = null;
+                    while (true) {
+                        const baseSuggested = fileName.replace(/[^\w\-.]/g, '_');
+                        const validBase = /^article\d+/i.test(baseSuggested.replace(/\.(html?)$/i, ''));
+                        const proposed = validBase ? `${baseSuggested.replace(/\.(html?)$/i, '')}.html` : 'article1_edito.html';
+                        const handle = await window.showSaveFilePicker({
+                            suggestedName: proposed,
+                            types: [{
+                                description: 'Fichier HTML',
+                                accept: { 'text/html': ['.html'] }
+                            }]
+                        });
+                        const chosenName = (handle && handle.name) ? handle.name : proposed;
+                        const baseNoExt = chosenName.replace(/\.(html?)$/i, '');
+                        if (!/^article\d+/i.test(baseNoExt)) {
+                            alert("Nom de fichier invalide: il doit commencer par 'articleN' (ex: article1_edito.html)\n\nLa sauvegarde est annulée.");
+                            // Abort save entirely (Option A)
+                            return;
+                        }
+                        chosenHandle = handle;
+                        break;
+                    }
+                    // Final safety check before writing
+                    try {
+                        const finalName = (chosenHandle && chosenHandle.name ? chosenHandle.name : '').replace(/\.(html?)$/i, '');
+                        if (!/^article\d+/i.test(finalName)) {
+                            // Do not write if name is still invalid for any reason
+                            return;
+                        }
+                    } catch(_) { return; }
+                    const writable = await chosenHandle.createWritable();
                     await writable.write(fullHTML);
                     await writable.close();
                     
                     alert('Newsletter sauvegardée avec succès !' + (imageSummaryText ? '\n' + imageSummaryText : ''));
                     return;
                 } catch (err) {
-                    if (err.name !== 'AbortError') {
-                        console.error('Error saving file:', err);
-                        // Fall through to the download method
-                    } else {
+                    if (err && err.name === 'AbortError') {
                         // User cancelled the save dialog
                         return;
                     }
+                    console.error('Error saving file:', err);
+                    // Fall through to the download method
                 }
             }
             
             // Fallback for older browsers
             try {
+                // Ensure filename chosen/suggested is valid; prompt user if not
+                let baseName = fileName.replace(/[^\w\-.]/g, '_');
+                baseName = baseName.replace(/\.(html?)$/i, '');
+                if (!/^article\d+/i.test(baseName)) {
+                    const entered = prompt("Entrez un nom de fichier commençant par 'articleN' (ex: article1_edito)", 'article1_edito');
+                    if (!entered) {
+                        alert('Sauvegarde annulée');
+                        return;
+                    }
+                    baseName = (entered || '').trim().replace(/[^\w\-.]/g, '_').replace(/\.(html?)$/i, '');
+                    if (!/^article\d+/i.test(baseName)) {
+                        alert("Nom de fichier invalide: il doit commencer par 'articleN'");
+                        return;
+                    }
+                }
+                const finalDownloadName = `${baseName}.html`;
+
                 const blob = new Blob([fullHTML], { type: 'text/html;charset=utf-8' });
                 const url = URL.createObjectURL(blob);
                 
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `${fileName.replace(/[^\w\-.]/g, '_')}.html`;
+                a.download = finalDownloadName;
                 
                 // Add to document, trigger click, then remove
                 document.body.appendChild(a);

@@ -84,9 +84,6 @@
                     </button>
         </div>
             </div>
-            <button class="tool-btn" id="insertTableBtn">
-                <i class="fas fa-table"></i> Insérer Tableau
-            </button>
             <div class="tool-group">
                 <button class="tool-btn" id="insertSectionBtn">
                     <i class="fas fa-th-large"></i> Insérer Section
@@ -100,6 +97,9 @@
                         </button>
                     <button class="option-btn" id="gallerySectionBtn">
                         <i class="fas fa-images"></i> Galerie
+                        </button>
+                    <button class="option-btn" id="multiImagesSectionBtn">
+                        <i class="fas fa-images"></i> Multi images
                         </button>
                     <button class="option-btn" id="quoteSectionBtn">
                         <i class="fas fa-quote-left"></i> Promotion
@@ -146,7 +146,9 @@
     <!-- Main editable area (must be sibling of editor-sidebar inside main-content-wrapper) -->
     <main class="main-content">
       <div class="content-wrapper" style="position: relative; height: 100%;">
-        <div class="editable-content" id="editableContent" contenteditable="true" style="height: 100%; overflow-y: auto;"></div>
+        <div class="content-area">
+          <div class="editable-content" id="editableContent" contenteditable="true" spellcheck="false" style="height: 100%; overflow-y: auto;"></div>
+        </div>
       </div>
     </main>
 
@@ -157,14 +159,11 @@
             </select>
             <select id="fontSize" class="toolbar-select">
                 <option value="" selected>Taille</option>
-                <option value="52">Sujette </option>
-                <option value="22">Résumé </option>
-               <option value="48">Titre G </option>
-               <option value="36">Titre P </option>
-               <option value="26">S-titre G</option>
-               <option value="20">S-titre P</option>
-               <option value="16">Corps G </option>
-               <option value="14">Corps P </option>
+                <option value="52">Titre_P</option>
+                <option value="22">Sous_titre _P</option>
+               <option value="48">Titre_C</option>
+               <option value="36">Sous_titre_C</option>
+               <option value="26">Texte_C</option>
             </select>
             <select id="lineHeight" class="toolbar-select" title="Interligne">
                 <option value="">Interligne</option>
@@ -291,67 +290,10 @@
             <button class="toolbar-btn" id="removeFormatBtn" title="Supprimer la mise en forme"><i class="fas fa-remove-format"></i></button>
                     </div>
                 </div>
-    <div class="table-toolbar" id="tableToolbar" style="display: none;">
-        <div class="table-tools">
-            <button class="table-tool" id="insertRowBtn"><i class="fas fa-plus"></i> Ligne</button>
-            <button class="table-tool" id="insertColBtn"><i class="fas fa-plus"></i> Colonne</button>
-            <button class="table-tool" id="deleteRowBtn"><i class="fas fa-minus"></i> Ligne</button>
-            <button class="table-tool" id="deleteColBtn"><i class="fas fa-minus"></i> Colonne</button>
-            <div class="dropdown">
-                <button class="table-tool" id="tableBgColorDropdownBtn" title="Couleur de fond du tableau">
-                    <i class="fas fa-fill-drip" style="background-color: #ffffff;"></i>
-                </button>
-                <div class="dropdown-content color-dropdown" id="tableBgColorDropdownContent" style="display: none;">
-                    <div class="palette-heading">Couleurs principales</div>
-                    <div class="color-palette primary" id="tableBgPrimaryPalette">
-                        <div class="palette-color" style="background-color: #000000;" data-color="#000000"></div>
-                        <div class="palette-color" style="background-color: #FFFFFF;" data-color="#FFFFFF"></div>
-                        <div class="palette-color" style="background-color: #6E3CBE;" data-color="#6E3CBE"></div>
-                        <div class="palette-color" style="background-color: #0A9BCD;" data-color="#0A9BCD"></div>
-                        <div class="palette-color" style="background-color: #F5B400;" data-color="#F5B400"></div>
-                        <div class="palette-color" style="background-color: #F06400;" data-color="#F06400"></div>
-                        <div class="palette-color" style="background-color: #00B176;" data-color="#00B176"></div>
-                    </div>
-                    <div class="palette-heading">Couleurs du thème</div>
-                    <div class="color-palette" id="tableBgColorPalette">
-                        <div class="palette-color" style="background-color: #585858;" data-color="#585858"></div>
-                        <div class="palette-color" style="background-color: #7E7E7E;" data-color="#7E7E7E"></div>
-                        <div class="palette-color" style="background-color: #A9A9A9;" data-color="#A9A9A9"></div>
-                        <div class="palette-color" style="background-color: #D4D4D4;" data-color="#D4D4D4"></div>
-                        <div class="palette-color" style="background-color: #925ED2;" data-color="#925ED2"></div>
-                        <div class="palette-color" style="background-color: #AE87DE;" data-color="#AE87DE"></div>
-                        <div class="palette-color" style="background-color: #C9AFE9;" data-color="#C9AFE9"></div>
-                        <div class="palette-color" style="background-color: #E4D7F4;" data-color="#E4D7F4"></div>
-                        <div class="palette-color" style="background-color: #00B1DB;" data-color="#00B1DB"></div>
-                        <div class="palette-color" style="background-color: #4AC5E5;" data-color="#4AC5E5"></div>
-                        <div class="palette-color" style="background-color: #8DD9EE;" data-color="#8DD9EE"></div>
-                        <div class="palette-color" style="background-color: #C7ECF6;" data-color="#C7ECF6"></div>
-                        <div class="palette-color" style="background-color: #FFC200;" data-color="#FFC200"></div>
-                        <div class="palette-color" style="background-color: #FFD14E;" data-color="#FFD14E"></div>
-                        <div class="palette-color" style="background-color: #FFE18E;" data-color="#FFE18E"></div>
-                        <div class="palette-color" style="background-color: #FFF0C8;" data-color="#FFF0C8"></div>
-                        <div class="palette-color" style="background-color: #FF7C03;" data-color="#FF7C03"></div>
-                        <div class="palette-color" style="background-color: #FF9E59;" data-color="#FF9E59"></div>
-                        <div class="palette-color" style="background-color: #FFBF92;" data-color="#FFBF92"></div>
-                        <div class="palette-color" style="background-color: #FFDFC9;" data-color="#FFDFC9"></div>
-                        <div class="palette-color" style="background-color: #00C58D;" data-color="#00C58D"></div>
-                        <div class="palette-color" style="background-color: #2FD3AB;" data-color="#2FD3AB"></div>
-                        <div class="palette-color" style="background-color: #84E3C7;" data-color="#84E3C7"></div>
-                        <div class="palette-color" style="background-color: #C4F0E3;" data-color="#C4F0E3"></div>
-                    </div>
-                </div>
-            </div>
-            <button class="table-tool" id="tablePropsBtn"><i class="fas fa-cog"></i> Propriétés</button>
-            </div>
-                </div>
+    
     <div class="image-toolbar" id="imageToolbar" style="display: none;">
         <div class="image-tools">
-            <div class="toolbar-section">
-                <div class="aspect-ratio-toggle">
-                    <input type="checkbox" id="keepAspectRatio" checked>
-                    <label for="keepAspectRatio">Conserver les proportions</label>
-                </div>
-                </div>
+            <div class="image-tools-row">
             <div class="toolbar-divider"></div>
             <div class="toolbar-section">
                 <div class="dropdown">
@@ -392,9 +334,6 @@
                         <i class="fas fa-arrows-alt"></i> Position <i class="fas fa-caret-down"></i>
                     </button>
                     <div class="dropdown-content" id="positionOptions" style="display: none;">
-                        <button class="dropdown-item" id="freePositionBtn">
-                            <i class="fas fa-arrows-alt"></i> Position libre
-                        </button>
                         <button class="dropdown-item" id="floatLeftBtn">
                             <i class="fas fa-align-left"></i> Flotter à gauche
                         </button>
@@ -404,14 +343,68 @@
                         <button class="dropdown-item" id="inlineBtn">
                             <i class="fas fa-align-center"></i> Centrer
                         </button>
-    </div>
-    </div>
+                    </div>
+                </div>
+            </div>
+            <div class="toolbar-divider"></div>
+            <div class="toolbar-section">
+                <div class="dropdown">
+                    <button class="image-tool dropdown-btn" id="gapAdvancedBtn" title="Espacement personnalisé">
+                        <i class="fas fa-ruler-combined"></i> <i class="fas fa-caret-down"></i>
+                    </button>
+                    <div class="dropdown-content" id="gapAdvancedOptions" style="display: none; padding:10px; min-width:220px;">
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; align-items:center;">
+                            <label for="gapTopInput" style="font-size:12px; color:#555;">Haut</label>
+                            <input id="gapTopInput" type="number" min="0" step="1" value="20" class="kyo-input" style="width:80px; height:26px;">
+                            <label for="gapRightInput" style="font-size:12px; color:#555;">Droite</label>
+                            <input id="gapRightInput" type="number" min="0" step="1" value="20" class="kyo-input" style="width:80px; height:26px;">
+                            <label for="gapBottomInput" style="font-size:12px; color:#555;">Bas</label>
+                            <input id="gapBottomInput" type="number" min="0" step="1" value="20" class="kyo-input" style="width:80px; height:26px;">
+                            <label for="gapLeftInput" style="font-size:12px; color:#555;">Gauche</label>
+                            <input id="gapLeftInput" type="number" min="0" step="1" value="20" class="kyo-input" style="width:80px; height:26px;">
+                        </div>
+                        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+                            <button id="applyGapBtn" class="image-tool" style="padding:6px 10px;">Appliquer</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
             </div>
             <div class="toolbar-divider"></div>
             <div class="toolbar-section">
                 <button class="image-tool" id="resetImageBtn"><i class="fas fa-undo"></i> Réinitialiser</button>
                 <button class="image-tool" id="deleteImageBtn" style="background-color: #dc3545;"><i class="fas fa-trash"></i> Supprimer</button>
             </div>
+            </div> <!-- /.image-tools-row -->
+            <!-- Second line: proportions toggle -->
+            <div class="toolbar-section" id="aspectRatioRow" style="flex-basis:100%; display:flex; align-items:center; gap:8px; margin-top:4px;">
+                <div class="aspect-ratio-toggle">
+                    <input type="checkbox" id="keepAspectRatio" checked>
+                    <label for="keepAspectRatio">Conserver les proportions</label>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="video-toolbar" id="videoToolbar" style="display: none;">
+        <div class="video-tools">
+            <div class="dropdown">
+                <button class="toolbar-btn" id="videoSizeBtn" title="Taille de la vidéo"><i class="fas fa-expand-arrows-alt"></i></button>
+                <div class="dropdown-content" id="videoSizeOptions" style="display: none;">
+                    <button class="dropdown-item" data-size="25"><i class="fas fa-ruler-horizontal"></i> 25%</button>
+                    <button class="dropdown-item" data-size="33"><i class="fas fa-ruler-horizontal"></i> 33%</button>
+                    <button class="dropdown-item" data-size="50"><i class="fas fa-ruler-horizontal"></i> 50%</button>
+                    <button class="dropdown-item" data-size="66"><i class="fas fa-ruler-horizontal"></i> 66%</button>
+                    <button class="dropdown-item" data-size="75"><i class="fas fa-ruler-horizontal"></i> 75%</button>
+                    <button class="dropdown-item" data-size="100"><i class="fas fa-ruler-horizontal"></i> 100%</button>
+                    <button class="dropdown-item" data-size="auto"><i class="fas fa-ruler-horizontal"></i> Auto</button>
+                </div>
+            </div>
+            <div class="toolbar-divider"></div>
+            <button class="toolbar-btn" id="videoAlignLeftBtn" title="Aligner à gauche"><i class="fas fa-align-left"></i></button>
+            <button class="toolbar-btn" id="videoAlignCenterBtn" title="Centrer"><i class="fas fa-align-center"></i></button>
+            <button class="toolbar-btn" id="videoAlignRightBtn" title="Aligner à droite"><i class="fas fa-align-right"></i></button>
+            <div class="toolbar-divider"></div>
+            <button class="toolbar-btn" id="videoDeleteBtn" title="Supprimer la vidéo" style="color:#dc3545;"><i class="fas fa-trash"></i></button>
         </div>
     </div>
     <div class="section-toolbar" id="sectionToolbar" style="display: none;">
@@ -437,6 +430,7 @@
             <button class="toolbar-btn" id="sectionAlignLeftBtn" title="Aligner à gauche"><i class="fas fa-align-left"></i></button>
             <button class="toolbar-btn" id="sectionAlignCenterBtn" title="Centrer"><i class="fas fa-align-center"></i></button>
             <button class="toolbar-btn" id="sectionAlignRightBtn" title="Aligner à droite"><i class="fas fa-align-right"></i></button>
+            <button class="toolbar-btn" id="sectionDeleteBtn" title="Supprimer la section" style="color:#dc3545;"><i class="fas fa-trash"></i></button>
             <div class="toolbar-divider"></div>
             <div class="dropdown">
                 <button class="toolbar-btn" id="sectionBgColorDropdownBtn" title="Couleur de fond de la section">

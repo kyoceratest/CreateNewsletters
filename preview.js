@@ -1,4 +1,4 @@
-﻿// preview.js
+// preview.js
 // Extracted from preview.html to keep JS separate without changing UI/behavior.
 // On-screen text remains French; code and comments are in English.
 
