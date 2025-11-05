@@ -1736,12 +1736,19 @@ class NewsletterEditor {
                 const root = getEditableRoot();
                 if (!root) return 0;
                 let n = 0;
-                const hasNonEmptyText = (el) => {
-                    const txt = (el.textContent || '').replace(/\u200B/g, '').trim();
+                const hasNonEmptyDirectText = (el) => {
+                    let buf = '';
+                    el.childNodes.forEach(node => {
+                        if (node && node.nodeType === Node.TEXT_NODE) buf += node.nodeValue || '';
+                    });
+                    const txt = buf
+                        .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
+                        .replace(/\u00A0/g, ' ')
+                        .trim();
                     return txt.length > 0;
                 };
                 root.querySelectorAll('*').forEach(el => {
-                    if (el && el.style && el.style.fontSize === px && hasNonEmptyText(el)) n++;
+                    if (el && el.style && el.style.fontSize === px && hasNonEmptyDirectText(el)) n++;
                 });
                 return n;
             } catch (_) { return 0; }
@@ -6504,24 +6511,67 @@ class NewsletterEditor {
             // Pre-save validation: check for 52px and 22px font sizes (with non-empty text)
             // and image filenames starting with 'article'
             try {
-                const allEls = tempDiv.querySelectorAll('*');
+                const normalize = (s) => (s || '')
+                    .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
+                    .replace(/\u00A0/g, ' ')
+                    .trim();
+
+                const textNodes = [];
+                try {
+                    const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, {
+                        acceptNode: (n) => normalize(n && n.nodeValue).length > 0
+                            ? NodeFilter.FILTER_ACCEPT
+                            : NodeFilter.FILTER_REJECT
+                    });
+                    let node;
+                    while ((node = walker.nextNode())) textNodes.push(node);
+                } catch (_) { /* fallback below if needed */ }
+
+                const nearestInlineFontSizePx = (textNode) => {
+                    try {
+                        let el = textNode.parentElement;
+                        while (el) {
+                            let fs = '';
+                            if (el.style && el.style.fontSize) fs = String(el.style.fontSize).toLowerCase();
+                            if (!fs) {
+                                const sa = (el.getAttribute && el.getAttribute('style')) || '';
+                                const m = sa && sa.match(/font-size\s*:\s*([0-9.]+)px/i);
+                                if (m) fs = (m[1] + 'px').toLowerCase();
+                            }
+                            if (fs) return fs;
+                            el = el.parentElement;
+                        }
+                    } catch (_) { /* ignore */ }
+                    return '';
+                };
+
                 let has52 = false;
                 let has22 = false;
-                const hasNonEmptyText = (el) => {
-                    const txt = (el.textContent || '').replace(/\u200B/g, '').trim();
-                    return txt.length > 0;
-                };
-                for (const el of allEls) {
-                    const styleAttr = (el.getAttribute && el.getAttribute('style')) || '';
-                    if (!has52 && /font-size\s*:\s*52px/i.test(styleAttr) && hasNonEmptyText(el)) has52 = true;
-                    if (!has22 && /font-size\s*:\s*22px/i.test(styleAttr) && hasNonEmptyText(el)) has22 = true;
-                    if (el.style) {
-                        const fs = (el.style.fontSize || '').toLowerCase();
-                        if (!has52 && fs === '52px' && hasNonEmptyText(el)) has52 = true;
-                        if (!has22 && fs === '22px' && hasNonEmptyText(el)) has22 = true;
+                if (textNodes.length === 0) {
+                    // Fallback: previous element-based heuristic (subtree text)
+                    const allEls = tempDiv.querySelectorAll('*');
+                    for (const el of allEls) {
+                        const hasText = normalize(el.textContent || '').length > 0;
+                        if (!hasText) continue;
+                        const styleAttr = (el.getAttribute && el.getAttribute('style')) || '';
+                        if (!has52 && /font-size\s*:\s*52px/i.test(styleAttr)) has52 = true;
+                        if (!has22 && /font-size\s*:\s*22px/i.test(styleAttr)) has22 = true;
+                        if (el.style) {
+                            const fs = (el.style.fontSize || '').toLowerCase();
+                            if (!has52 && fs === '52px') has52 = true;
+                            if (!has22 && fs === '22px') has22 = true;
+                        }
+                        if (has52 && has22) break;
                     }
-                    if (has52 && has22) break;
+                } else {
+                    for (const tn of textNodes) {
+                        const fs = nearestInlineFontSizePx(tn);
+                        if (!has52 && fs === '52px') has52 = true;
+                        if (!has22 && fs === '22px') has22 = true;
+                        if (has52 && has22) break;
+                    }
                 }
+                // Images: count those named articleN
                 let conformingImageCount = 0;
                 tempDiv.querySelectorAll('img').forEach(img => {
                     const src = (img.getAttribute('src') || '').trim();
