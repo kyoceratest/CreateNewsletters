@@ -6670,7 +6670,8 @@ class NewsletterEditor {
                 '.add-more-btn',
                 '.image-toolbar',
                 '.resize-handle',
-                '.rotation-handle'
+                '.rotation-handle',
+                '.video-toolbar-handle'
             ];
             
             elementsToRemove.forEach(selector => {
@@ -6716,7 +6717,83 @@ class NewsletterEditor {
             tempDiv.querySelectorAll('[data-placeholder]').forEach(el => {
                 el.removeAttribute('data-placeholder');
             });
-            
+
+            // Normalize and harden embedded video iframes for final output (hide player UI/tool icons)
+            try {
+                const iframes = Array.from(tempDiv.querySelectorAll('iframe[src]'));
+                for (const ifr of iframes) {
+                    const raw = (ifr.getAttribute('src') || '').trim();
+                    if (!raw) continue;
+                    // Helper to safely build URLs and merge params
+                    const mergeParams = (urlStr, paramObj) => {
+                        try {
+                            const u = new URL(urlStr, window.location.href);
+                            Object.entries(paramObj).forEach(([k, v]) => u.searchParams.set(k, String(v)));
+                            return u.toString();
+                        } catch (_) { return urlStr; }
+                    };
+                    // YouTube handling (including youtu.be short links)
+                    if (/youtu\.be|youtube\.com/i.test(raw)) {
+                        let src = raw;
+                        try {
+                            const u = new URL(raw, window.location.href);
+                            // If it's a watch URL or short URL, convert to embed
+                            let videoId = '';
+                            if (/youtu\.be/i.test(u.hostname)) {
+                                videoId = (u.pathname || '').split('/').filter(Boolean)[0] || '';
+                            } else if (/youtube\.com/i.test(u.hostname)) {
+                                if ((u.pathname || '').startsWith('/watch')) {
+                                    videoId = u.searchParams.get('v') || '';
+                                } else if ((u.pathname || '').startsWith('/embed/')) {
+                                    videoId = (u.pathname || '').split('/').pop() || '';
+                                }
+                            }
+                            if (videoId) {
+                                src = `https://www.youtube-nocookie.com/embed/${videoId}`;
+                            }
+                        } catch(_) { /* keep original src if parsing fails */ }
+                        const ytParams = {
+                            rel: 0,
+                            modestbranding: 1,
+                            controls: 0,
+                            iv_load_policy: 3,
+                            fs: 0,
+                            disablekb: 1,
+                            playsinline: 1
+                        };
+                        const final = mergeParams(src, ytParams);
+                        ifr.setAttribute('src', final);
+                        // Ensure no border/fullscreen ui hooks
+                        ifr.removeAttribute('allowfullscreen');
+                        ifr.setAttribute('frameborder', '0');
+                        continue;
+                    }
+                    // Vimeo handling
+                    if (/vimeo\.com/i.test(raw)) {
+                        const final = mergeParams(raw, {
+                            title: 0,
+                            byline: 0,
+                            portrait: 0,
+                            badge: 0,
+                            controls: 0
+                        });
+                        ifr.setAttribute('src', final);
+                        ifr.setAttribute('frameborder', '0');
+                        continue;
+                    }
+                    // Dailymotion handling
+                    if (/dailymotion\.com/i.test(raw)) {
+                        const final = mergeParams(raw, {
+                            'ui-logo': 0,
+                            controls: 0
+                        });
+                        ifr.setAttribute('src', final);
+                        ifr.setAttribute('frameborder', '0');
+                        continue;
+                    }
+                }
+            } catch (_) { /* best-effort: do not block save */ }
+
             try {
                 const MAX_IMG_WIDTH = 800;
                 const JPEG_QUALITY = 0.85;
