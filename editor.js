@@ -1736,8 +1736,12 @@ class NewsletterEditor {
                 const root = getEditableRoot();
                 if (!root) return 0;
                 let n = 0;
+                const hasNonEmptyText = (el) => {
+                    const txt = (el.textContent || '').replace(/\u200B/g, '').trim();
+                    return txt.length > 0;
+                };
                 root.querySelectorAll('*').forEach(el => {
-                    if (el && el.style && el.style.fontSize === px) n++;
+                    if (el && el.style && el.style.fontSize === px && hasNonEmptyText(el)) n++;
                 });
                 return n;
             } catch (_) { return 0; }
@@ -6497,19 +6501,24 @@ class NewsletterEditor {
             // Create a temporary div to clean up the content
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = content;
-            // Pre-save validation: check for 52px and 22px font sizes and image filenames starting with 'article'
+            // Pre-save validation: check for 52px and 22px font sizes (with non-empty text)
+            // and image filenames starting with 'article'
             try {
                 const allEls = tempDiv.querySelectorAll('*');
                 let has52 = false;
                 let has22 = false;
+                const hasNonEmptyText = (el) => {
+                    const txt = (el.textContent || '').replace(/\u200B/g, '').trim();
+                    return txt.length > 0;
+                };
                 for (const el of allEls) {
                     const styleAttr = (el.getAttribute && el.getAttribute('style')) || '';
-                    if (!has52 && /font-size\s*:\s*52px/i.test(styleAttr)) has52 = true;
-                    if (!has22 && /font-size\s*:\s*22px/i.test(styleAttr)) has22 = true;
+                    if (!has52 && /font-size\s*:\s*52px/i.test(styleAttr) && hasNonEmptyText(el)) has52 = true;
+                    if (!has22 && /font-size\s*:\s*22px/i.test(styleAttr) && hasNonEmptyText(el)) has22 = true;
                     if (el.style) {
                         const fs = (el.style.fontSize || '').toLowerCase();
-                        if (!has52 && fs === '52px') has52 = true;
-                        if (!has22 && fs === '22px') has22 = true;
+                        if (!has52 && fs === '52px' && hasNonEmptyText(el)) has52 = true;
+                        if (!has22 && fs === '22px' && hasNonEmptyText(el)) has22 = true;
                     }
                     if (has52 && has22) break;
                 }
