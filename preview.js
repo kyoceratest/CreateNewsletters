@@ -14,7 +14,6 @@ function handlePreviewContent(data) {
     wrapper.innerHTML = html || '';
     try {
       normalizeAssetsInWrapper(wrapper);
-      sanitizeEmbeddedIframes(wrapper);
       // Sanitize editing affordances
       wrapper.querySelectorAll('[contenteditable]').forEach(el => {
         el.removeAttribute('contenteditable');
@@ -27,85 +26,6 @@ function handlePreviewContent(data) {
         });
       });
     } catch (_) {}
-
-// Hide player UI in embeds and strip editor-only UI from injected content
-function sanitizeEmbeddedIframes(container) {
-  try {
-    const iframes = Array.from(container.querySelectorAll('iframe[src]'));
-    for (const ifr of iframes) {
-      const raw = (ifr.getAttribute('src') || '').trim();
-      if (!raw) continue;
-      const mergeParams = (urlStr, paramObj) => {
-        try {
-          const u = new URL(urlStr, window.location.href);
-          Object.entries(paramObj).forEach(([k, v]) => u.searchParams.set(k, String(v)));
-          return u.toString();
-        } catch (_) { return urlStr; }
-      };
-      if (/youtu\.be|youtube\.com/i.test(raw)) {
-        let src = raw;
-        try {
-          const u = new URL(raw, window.location.href);
-          let videoId = '';
-          if (/youtu\.be/i.test(u.hostname)) {
-            videoId = (u.pathname || '').split('/').filter(Boolean)[0] || '';
-          } else if (/youtube\.com/i.test(u.hostname)) {
-            if ((u.pathname || '').startsWith('/watch')) {
-              videoId = u.searchParams.get('v') || '';
-            } else if ((u.pathname || '').startsWith('/embed/')) {
-              videoId = (u.pathname || '').split('/').pop() || '';
-            }
-          }
-          if (videoId) src = `https://www.youtube-nocookie.com/embed/${videoId}`;
-        } catch (_) {}
-        const ytParams = { rel: 0, modestbranding: 1, controls: 0, iv_load_policy: 3, fs: 0, disablekb: 1, playsinline: 1 };
-        const final = mergeParams(src, ytParams);
-        ifr.setAttribute('src', final);
-        ifr.removeAttribute('allowfullscreen');
-        ifr.setAttribute('frameborder', '0');
-        continue;
-      }
-      if (/vimeo\.com/i.test(raw)) {
-        const final = mergeParams(raw, { title: 0, byline: 0, portrait: 0, badge: 0, controls: 0 });
-        ifr.setAttribute('src', final);
-        ifr.setAttribute('frameborder', '0');
-        continue;
-      }
-      if (/dailymotion\.com/i.test(raw)) {
-        const final = mergeParams(raw, { 'ui-logo': 0, controls: 0 });
-        ifr.setAttribute('src', final);
-        ifr.setAttribute('frameborder', '0');
-        continue;
-      }
-    }
-  } catch (_) { /* ignore */ }
-}
-
-function stripEditorUI(container) {
-  try {
-    const selectors = [
-      '.video-toolbar-handle',
-      '.video-toolbar',
-      '.image-toolbar',
-      '.section-toolbar',
-      '.table-toolbar',
-      '.add-image-placeholder',
-      '.add-more-btn',
-      '.resize-handle',
-      '.rotation-handle',
-      '.image-delete-btn',
-      '.gallery-upload',
-      '.gallery-controls',
-      '.gallery-editor-only',
-      '.gallery-actions'
-    ];
-    selectors.forEach(sel => container.querySelectorAll(sel).forEach(el => el.remove()));
-    // Defensive: hide any remaining toolbar handles by style if found
-    container.querySelectorAll('[class*="toolbar"][class*="handle"]').forEach(el => {
-      try { el.style.display = 'none'; } catch (_) {}
-    });
-  } catch (_) { /* ignore */ }
-}
     target.innerHTML = '';
     while (wrapper.firstChild) target.appendChild(wrapper.firstChild);
     if (title) { try { document.title = title + ' - Aperçu'; } catch (_) {} }
@@ -231,7 +151,6 @@ async function loadHistoryPreviewById(historyId) {
   wrapper.innerHTML = fullHtml || (item.content || '');
   try {
     normalizeAssetsInWrapper(wrapper);
-    sanitizeEmbeddedIframes(wrapper);
     wrapper.querySelectorAll('[contenteditable]').forEach(el => {
       el.removeAttribute('contenteditable');
       el.contentEditable = 'false';
@@ -425,7 +344,6 @@ function normalizeAssetsInWrapper(wrapper) {
             const baseDir = (usedPath && usedPath.includes('/')) ? usedPath.substring(0, usedPath.lastIndexOf('/')) : '';
             normalizeAssetsRelative(wrapper, baseDir);
           }
-          sanitizeEmbeddedIframes(wrapper);
         } catch (_) { /* ignore */ }
         wrapper.querySelectorAll('[contenteditable]').forEach(el => {
           el.removeAttribute('contenteditable');

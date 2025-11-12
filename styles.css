@@ -447,7 +447,7 @@ th { background:#f8f9fa; }
 }
 
 body {
-    font-family: 'Verdana';
+    font-family: Verdana, sans-serif;
     margin: 0;
     background-color: #ffffff; /* set background to white for testing */
     color: #333;
@@ -533,7 +533,7 @@ body {
 
 /* Sidebar Styles */
 .editor-sidebar {
-    width: 190px;
+    width: 180px;
     background-color: #ffffff;
     padding: 20px 10px 20px 10px; /* left/right 10px */
     border-right: 1px solid #e0e0e0;
@@ -567,7 +567,7 @@ body {
 /* Ensure editable canvas is visible beside the fixed sidebar and below fixed header (editor view) */
 .newsletter-editor .main-content {
     /* Leave room for the fixed left sidebar */
-    margin-left: 190px;
+    margin-left: 180px;
     /* Leave room for the fixed header */
     padding-top: 90px;
     /* Create a scrollable canvas area */
@@ -582,13 +582,15 @@ body {
 .newsletter-editor .editable-content {
     min-height: calc(100vh - 120px);
     background: #ffffff;
+    width: 100% !important; /* ensure editable content spans full available width */
 }
 
 /* Match output spacing inside editor canvas */
 .newsletter-editor .content-area {
-  padding-left: 20px !important;
-  padding-right: 20px !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
   box-sizing: border-box;
+  width: 100% !important; /* ensure content area spans full available width */
 }
 
 /* Fix list marker alignment inside editor (scoped) */
@@ -1831,17 +1833,11 @@ body:not(.newsletter-editor) .image-toolbar,
 body:not(.newsletter-editor) .section-toolbar,
 body:not(.newsletter-editor) .table-toolbar,
 body:not(.newsletter-editor) .video-toolbar,
-body:not(.newsletter-editor) .video-toolbar-handle,
 body:not(.newsletter-editor) .resize-handle,
 body:not(.newsletter-editor) .rotation-handle,
 body:not(.newsletter-editor) .image-delete-btn,
 body:not(.newsletter-editor) .gallery-upload {
     display: none !important;
-}
-
-/* Prevent embedded player UI (e.g., YouTube overflow menu) from showing on hover in preview/output */
-body:not(.newsletter-editor) .video-align-wrapper iframe {
-  pointer-events: none !important;
 }
 
 /* Disable ALL editing capabilities in final output */
@@ -3679,10 +3675,10 @@ footer.kyocera-footer *,
 
 /* Newsletter editor specific styles - override index page styles */
 body.newsletter-editor .main-content {
-    margin-left: 260px !important;
-    margin-top: 56px !important; /* Adjusted to match header height */
-    padding: 20px !important;
-    width: calc(100% - 280px) !important;
+    margin-left: 180px !important; /* match .editor-sidebar width to eliminate left white space */
+    margin-top: 56px !important;   /* Adjusted to match header height */
+    padding: 0 !important;         /* remove inner padding that created extra white space */
+    width: calc(100% - 180px) !important; /* only subtract the sidebar width */
 }
 
 /* Accueil page specific styles - content next to sidebar */
