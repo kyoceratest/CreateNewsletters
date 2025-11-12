@@ -534,19 +534,20 @@
                 return '.jpg';
               } catch { return '.jpg'; }
             }
+            function blobToDataURL(blob) {
+              return new Promise((resolve) => {
+                try {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve(String(reader.result || ''));
+                  reader.onerror = () => resolve('');
+                  reader.readAsDataURL(blob);
+                } catch (_) { resolve(''); }
+              });
+            }
             async function uploadBlob(blob, suggestedName) {
-              const fn = sanitizeBaseName(suggestedName);
-              const fd = new FormData();
-              fd.append('image', blob, fn || 'image');
-              try { if (fn) fd.append('filename', fn); } catch (_) {}
-              try { fd.append('overwrite', '1'); } catch (_) {}
               try {
-                const res = await fetch('upload_image.php', { method: 'POST', body: fd });
-                if (!res.ok) throw new Error('upload failed');
-                const data = await res.json();
-                if (!data || !data.success || !data.url) throw new Error('bad response');
-                return data.url;
-              } catch (e) {
+                return await blobToDataURL(blob);
+              } catch (_) {
                 return '';
               }
             }
