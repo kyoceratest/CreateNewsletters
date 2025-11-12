@@ -4947,10 +4947,13 @@ class NewsletterEditor {
             
             // Clean up
             this.cancelImageCropping();
-            
+
+            // Ensure the image is re-selected so toolbar/handles are fully reinitialized
+            try { this.selectImage && this.selectImage(this.currentEditingImage); } catch (_) {}
+
             // Show resize and rotation handles again
             this.showResizeAndRotationHandles();
-            
+
             this.saveState();
             this.lastAction = 'Image recadrée';
         } catch (error) {
