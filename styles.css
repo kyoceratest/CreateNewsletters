@@ -533,7 +533,7 @@ body {
 
 /* Sidebar Styles */
 .editor-sidebar {
-    width: 180px;
+    width: 190px;
     background-color: #ffffff;
     padding: 20px 10px 20px 10px; /* left/right 10px */
     border-right: 1px solid #e0e0e0;
@@ -567,7 +567,7 @@ body {
 /* Ensure editable canvas is visible beside the fixed sidebar and below fixed header (editor view) */
 .newsletter-editor .main-content {
     /* Leave room for the fixed left sidebar */
-    margin-left: 180px;
+    margin-left: 190px;
     /* Leave room for the fixed header */
     padding-top: 90px;
     /* Create a scrollable canvas area */
@@ -582,15 +582,13 @@ body {
 .newsletter-editor .editable-content {
     min-height: calc(100vh - 120px);
     background: #ffffff;
-    width: 100% !important; /* ensure editable content spans full available width */
 }
 
 /* Match output spacing inside editor canvas */
 .newsletter-editor .content-area {
-  padding-left: 0 !important;
-  padding-right: 0 !important;
+  padding-left: 20px !important;
+  padding-right: 20px !important;
   box-sizing: border-box;
-  width: 100% !important; /* ensure content area spans full available width */
 }
 
 /* Fix list marker alignment inside editor (scoped) */
@@ -3675,10 +3673,10 @@ footer.kyocera-footer *,
 
 /* Newsletter editor specific styles - override index page styles */
 body.newsletter-editor .main-content {
-    margin-left: 180px !important; /* match .editor-sidebar width to eliminate left white space */
-    margin-top: 56px !important;   /* Adjusted to match header height */
-    padding: 0 !important;         /* remove inner padding that created extra white space */
-    width: calc(100% - 180px) !important; /* only subtract the sidebar width */
+    margin-left: 260px !important;
+    margin-top: 56px !important; /* Adjusted to match header height */
+    padding: 20px !important;
+    width: calc(100% - 280px) !important;
 }
 
 /* Accueil page specific styles - content next to sidebar */
