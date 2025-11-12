@@ -480,6 +480,7 @@
         <script>
           (function(){
             const EDITABLE_ID = 'editableContent';
+            const TRANSPARENT_PLACEHOLDER = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
             function blobFromUrl(url) {
               return fetch(url).then(r => r.blob());
             }
@@ -534,19 +535,20 @@
                 return '.jpg';
               } catch { return '.jpg'; }
             }
+            function blobToDataURL(blob) {
+              return new Promise((resolve) => {
+                try {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve(String(reader.result || ''));
+                  reader.onerror = () => resolve('');
+                  reader.readAsDataURL(blob);
+                } catch (_) { resolve(''); }
+              });
+            }
             async function uploadBlob(blob, suggestedName) {
-              const fn = sanitizeBaseName(suggestedName);
-              const fd = new FormData();
-              fd.append('image', blob, fn || 'image');
-              try { if (fn) fd.append('filename', fn); } catch (_) {}
-              try { fd.append('overwrite', '1'); } catch (_) {}
               try {
-                const res = await fetch('upload_image.php', { method: 'POST', body: fd });
-                if (!res.ok) throw new Error('upload failed');
-                const data = await res.json();
-                if (!data || !data.success || !data.url) throw new Error('bad response');
-                return data.url;
-              } catch (e) {
+                return await blobToDataURL(blob);
+              } catch (_) {
                 return '';
               }
             }
@@ -564,6 +566,50 @@
                 return '';
               } catch { return ''; }
             }
+            function insertHTMLAtCursor(html) {
+              try {
+                document.execCommand('insertHTML', false, html);
+                return;
+              } catch (_) {}
+              try {
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount) {
+                  const range = sel.getRangeAt(0);
+                  const frag = range.createContextualFragment(html);
+                  range.deleteContents();
+                  range.insertNode(frag);
+                } else {
+                  editable.insertAdjacentHTML('beforeend', html);
+                }
+              } catch (_) { editable.insertAdjacentHTML('beforeend', html); }
+            }
+            async function sanitizeIncomingHTML(html) {
+              try {
+                const tmp = document.createElement('div');
+                tmp.innerHTML = html || '';
+                const imgs = Array.from(tmp.querySelectorAll('img'));
+                for (const img of imgs) {
+                  const src = img.getAttribute('src') || '';
+                  if (!src) { img.setAttribute('src', TRANSPARENT_PLACEHOLDER); continue; }
+                  const isData = /^data:/i.test(src);
+                  const isHttp = /^https?:/i.test(src);
+                  const isBlob = /^blob:/i.test(src);
+                  if (isData) continue;
+                  if (isHttp || isBlob) {
+                    try {
+                      const b = await blobFromUrl(src);
+                      const r = await resizeBlobIfNeeded(b, b.type || '');
+                      const dataUrl = await uploadBlob(r, originalNameFromSrc(src) || 'image');
+                      if (dataUrl) img.setAttribute('src', dataUrl);
+                      else img.setAttribute('src', TRANSPARENT_PLACEHOLDER);
+                    } catch (_) { img.setAttribute('src', TRANSPARENT_PLACEHOLDER); }
+                    continue;
+                  }
+                  img.setAttribute('src', TRANSPARENT_PLACEHOLDER);
+                }
+                return tmp.innerHTML;
+              } catch (_) { return html || ''; }
+            }
             async function processImgEl(img) {
               try {
                 const src = img.getAttribute('src') || img.src || '';
@@ -572,7 +618,11 @@
                 const isData = /^data:/i.test(src);
                 const isHttp = /^https?:/i.test(src);
                 const isBlob = /^blob:/i.test(src);
-                if (!isData && !isHttp && !isBlob) return;
+                if (!isData && !isHttp && !isBlob) {
+                  try { img.setAttribute('data-original-src', src); } catch(_) {}
+                  try { img.src = TRANSPARENT_PLACEHOLDER; } catch(_) {}
+                  return; // do not attempt to fetch unknown/relative paths
+                }
                 const guessedName = isHttp ? src : (img.getAttribute('alt') || 'image');
                 let blob;
                 if (isData) {
@@ -585,7 +635,11 @@
                   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
                   blob = new Blob([arr], { type: mime });
                 } else {
-                  try { blob = await blobFromUrl(src); } catch { return; }
+                  if (isHttp || isBlob) {
+                    try { blob = await blobFromUrl(src); } catch { return; }
+                  } else {
+                    return;
+                  }
                 }
                 const resized = await resizeBlobIfNeeded(blob, blob.type || '');
                 const preferName = originalNameFromSrc(src) || guessedName;
@@ -609,11 +663,53 @@
               }
             });
             observer.observe(editable, { childList: true, subtree: true });
-            editable.addEventListener('paste', () => {
-              setTimeout(() => { editable.querySelectorAll('img').forEach(processImgEl); }, 0);
+            editable.addEventListener('paste', async (e) => {
+              try {
+                e.preventDefault();
+                const cb = e.clipboardData || window.clipboardData;
+                if (!cb) return;
+                const files = cb.files && cb.files.length ? Array.from(cb.files) : [];
+                const imgFiles = files.filter(f => /^image\//i.test(f.type));
+                if (imgFiles.length) {
+                  for (const f of imgFiles) {
+                    const dataUrl = await new Promise((resolve) => { const r = new FileReader(); r.onload = ev => resolve(String(ev.target && ev.target.result || '')); r.onerror = () => resolve(''); r.readAsDataURL(f); });
+                    if (dataUrl) insertHTMLAtCursor(`<img src="${dataUrl}" alt="${(f.name||'Image').replace(/"/g,'')}">`);
+                  }
+                  return;
+                }
+                const html = cb.getData && cb.getData('text/html');
+                if (html) {
+                  const sanitized = await sanitizeIncomingHTML(html);
+                  insertHTMLAtCursor(sanitized);
+                  return;
+                }
+                const text = cb.getData && cb.getData('text/plain');
+                if (text) document.execCommand('insertText', false, text);
+              } catch (_) {}
             });
-            editable.addEventListener('drop', () => {
-              setTimeout(() => { editable.querySelectorAll('img').forEach(processImgEl); }, 0);
+            editable.addEventListener('drop', async (e) => {
+              try {
+                e.preventDefault();
+                const dt = e.dataTransfer;
+                if (!dt) return;
+                const files = dt.files && dt.files.length ? Array.from(dt.files) : [];
+                const imgFiles = files.filter(f => /^image\//i.test(f.type));
+                if (imgFiles.length) {
+                  for (const f of imgFiles) {
+                    const dataUrl = await new Promise((resolve) => { const r = new FileReader(); r.onload = ev => resolve(String(ev.target && ev.target.result || '')); r.onerror = () => resolve(''); r.readAsDataURL(f); });
+                    if (dataUrl) insertHTMLAtCursor(`<img src="${dataUrl}" alt="${(f.name||'Image').replace(/"/g,'')}">`);
+                  }
+                  return;
+                }
+                const html = dt.getData && (dt.getData('text/html') || '');
+                if (html) {
+                  const sanitized = await sanitizeIncomingHTML(html);
+                  insertHTMLAtCursor(sanitized);
+                  return;
+                }
+                const uri = dt.getData && (dt.getData('text/uri-list') || dt.getData('text/plain') || '');
+                if (uri) document.execCommand('insertText', false, uri);
+              } catch (_) {}
             });
             async function exportZip() {
               const imgs = Array.from(document.querySelectorAll('#' + EDITABLE_ID + ' img'));

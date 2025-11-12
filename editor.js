@@ -1736,8 +1736,19 @@ class NewsletterEditor {
                 const root = getEditableRoot();
                 if (!root) return 0;
                 let n = 0;
+                const hasNonEmptyDirectText = (el) => {
+                    let buf = '';
+                    el.childNodes.forEach(node => {
+                        if (node && node.nodeType === Node.TEXT_NODE) buf += node.nodeValue || '';
+                    });
+                    const txt = buf
+                        .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
+                        .replace(/\u00A0/g, ' ')
+                        .trim();
+                    return txt.length > 0;
+                };
                 root.querySelectorAll('*').forEach(el => {
-                    if (el && el.style && el.style.fontSize === px) n++;
+                    if (el && el.style && el.style.fontSize === px && hasNonEmptyDirectText(el)) n++;
                 });
                 return n;
             } catch (_) { return 0; }
@@ -3806,8 +3817,12 @@ class NewsletterEditor {
                     wrapper.style.cssText = 'position: relative; display: inline-block; margin: 10px 0;';
                 }
             }
-            image.parentNode.insertBefore(wrapper, image);
-            wrapper.appendChild(image);
+            if (image.parentNode) {
+                image.parentNode.insertBefore(wrapper, image);
+                wrapper.appendChild(image);
+            } else {
+                return; // image must be in DOM to add handles safely
+            }
         } else {
             // If wrapper exists and image is inside gallery, ensure natural flow so container height follows image
             if (isInGallery) {
@@ -3888,6 +3903,13 @@ class NewsletterEditor {
         
         // Update handle positions after wrapper is set up
         this.updateResizeHandlePositions();
+
+        // If currently in absolute positioning, ensure dragging is wired after any re-wrapping
+        try {
+            if (wrapper.classList && wrapper.classList.contains('position-absolute')) {
+                this.makeImageDraggable(wrapper);
+            }
+        } catch (_) {}
     }
     
     updateResizeHandlePositions() {
@@ -4081,8 +4103,18 @@ class NewsletterEditor {
             // If no wrapper exists, the image might be directly in the content
             wrapper = document.createElement('div');
             wrapper.className = 'image-wrapper';
-            this.currentEditingImage.parentNode.insertBefore(wrapper, this.currentEditingImage);
-            wrapper.appendChild(this.currentEditingImage);
+            if (this.currentEditingImage.parentNode) {
+                this.currentEditingImage.parentNode.insertBefore(wrapper, this.currentEditingImage);
+                wrapper.appendChild(this.currentEditingImage);
+            } else {
+                const host = document.getElementById('editableContent') || document.body;
+                if (host) {
+                    host.appendChild(wrapper);
+                    wrapper.appendChild(this.currentEditingImage);
+                } else {
+                    return; // no valid host
+                }
+            }
         }
         
         // Remove any existing position classes
@@ -4263,8 +4295,11 @@ class NewsletterEditor {
             // Store the initial position
             startX = e.clientX;
             startY = e.clientY;
-            startLeft = parseInt(wrapper.style.left);
-            startTop = parseInt(wrapper.style.top);
+            const parsedLeft = parseInt(wrapper.style.left);
+            const parsedTop = parseInt(wrapper.style.top);
+            // Fallback to current offsets if styles are not set
+            startLeft = Number.isFinite(parsedLeft) ? parsedLeft : (wrapper.offsetLeft || 0);
+            startTop = Number.isFinite(parsedTop) ? parsedTop : (wrapper.offsetTop || 0);
             e.preventDefault();
             e.stopPropagation();
         };
@@ -4294,8 +4329,10 @@ class NewsletterEditor {
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
             
-            wrapper.style.left = (startLeft + dx) + 'px';
-            wrapper.style.top = (startTop + dy) + 'px';
+            const baseLeft = Number.isFinite(startLeft) ? startLeft : (wrapper.offsetLeft || 0);
+            const baseTop = Number.isFinite(startTop) ? startTop : (wrapper.offsetTop || 0);
+            wrapper.style.left = (baseLeft + dx) + 'px';
+            wrapper.style.top = (baseTop + dy) + 'px';
             
             this.saveState();
             this.lastAction = 'Image déplacée';
@@ -4314,8 +4351,10 @@ class NewsletterEditor {
                 // Store the initial position
                 startX = e.clientX;
                 startY = e.clientY;
-                startLeft = parseInt(wrapper.style.left);
-                startTop = parseInt(wrapper.style.top);
+                const parsedLeft2 = parseInt(wrapper.style.left);
+                const parsedTop2 = parseInt(wrapper.style.top);
+                startLeft = Number.isFinite(parsedLeft2) ? parsedLeft2 : (wrapper.offsetLeft || 0);
+                startTop = Number.isFinite(parsedTop2) ? parsedTop2 : (wrapper.offsetTop || 0);
                 
                 // Add a class to indicate dragging
                 wrapper.classList.add('dragging');
@@ -4919,13 +4958,19 @@ class NewsletterEditor {
             
             // Apply the cropped image to the current image
             this.currentEditingImage.src = croppedImageDataUrl;
+            try { this.currentEditingImage.dataset.originalSrc = croppedImageDataUrl; } catch (_) {}
+            // Reattach wrapper/handles to ensure further edits (move/resize/crop) work
+            try { this.addResizeHandlesToImage(this.currentEditingImage); } catch (_) {}
             
             // Clean up
             this.cancelImageCropping();
-            
+
+            // Ensure the image is re-selected so toolbar/handles are fully reinitialized
+            try { this.selectImage && this.selectImage(this.currentEditingImage); } catch (_) {}
+
             // Show resize and rotation handles again
             this.showResizeAndRotationHandles();
-            
+
             this.saveState();
             this.lastAction = 'Image recadrée';
         } catch (error) {
@@ -6497,22 +6542,70 @@ class NewsletterEditor {
             // Create a temporary div to clean up the content
             const tempDiv = document.createElement('div');
             tempDiv.innerHTML = content;
-            // Pre-save validation: check for 52px and 22px font sizes and image filenames starting with 'article'
+            // Pre-save validation: check for 52px and 22px font sizes (with non-empty text)
+            // and image filenames starting with 'article'
             try {
-                const allEls = tempDiv.querySelectorAll('*');
+                const normalize = (s) => (s || '')
+                    .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
+                    .replace(/\u00A0/g, ' ')
+                    .trim();
+
+                const textNodes = [];
+                try {
+                    const walker = document.createTreeWalker(tempDiv, NodeFilter.SHOW_TEXT, {
+                        acceptNode: (n) => normalize(n && n.nodeValue).length > 0
+                            ? NodeFilter.FILTER_ACCEPT
+                            : NodeFilter.FILTER_REJECT
+                    });
+                    let node;
+                    while ((node = walker.nextNode())) textNodes.push(node);
+                } catch (_) { /* fallback below if needed */ }
+
+                const nearestInlineFontSizePx = (textNode) => {
+                    try {
+                        let el = textNode.parentElement;
+                        while (el) {
+                            let fs = '';
+                            if (el.style && el.style.fontSize) fs = String(el.style.fontSize).toLowerCase();
+                            if (!fs) {
+                                const sa = (el.getAttribute && el.getAttribute('style')) || '';
+                                const m = sa && sa.match(/font-size\s*:\s*([0-9.]+)px/i);
+                                if (m) fs = (m[1] + 'px').toLowerCase();
+                            }
+                            if (fs) return fs;
+                            el = el.parentElement;
+                        }
+                    } catch (_) { /* ignore */ }
+                    return '';
+                };
+
                 let has52 = false;
                 let has22 = false;
-                for (const el of allEls) {
-                    const styleAttr = (el.getAttribute && el.getAttribute('style')) || '';
-                    if (!has52 && /font-size\s*:\s*52px/i.test(styleAttr)) has52 = true;
-                    if (!has22 && /font-size\s*:\s*22px/i.test(styleAttr)) has22 = true;
-                    if (el.style) {
-                        const fs = (el.style.fontSize || '').toLowerCase();
+                if (textNodes.length === 0) {
+                    // Fallback: previous element-based heuristic (subtree text)
+                    const allEls = tempDiv.querySelectorAll('*');
+                    for (const el of allEls) {
+                        const hasText = normalize(el.textContent || '').length > 0;
+                        if (!hasText) continue;
+                        const styleAttr = (el.getAttribute && el.getAttribute('style')) || '';
+                        if (!has52 && /font-size\s*:\s*52px/i.test(styleAttr)) has52 = true;
+                        if (!has22 && /font-size\s*:\s*22px/i.test(styleAttr)) has22 = true;
+                        if (el.style) {
+                            const fs = (el.style.fontSize || '').toLowerCase();
+                            if (!has52 && fs === '52px') has52 = true;
+                            if (!has22 && fs === '22px') has22 = true;
+                        }
+                        if (has52 && has22) break;
+                    }
+                } else {
+                    for (const tn of textNodes) {
+                        const fs = nearestInlineFontSizePx(tn);
                         if (!has52 && fs === '52px') has52 = true;
                         if (!has22 && fs === '22px') has22 = true;
+                        if (has52 && has22) break;
                     }
-                    if (has52 && has22) break;
                 }
+                // Images: count those named articleN
                 let conformingImageCount = 0;
                 tempDiv.querySelectorAll('img').forEach(img => {
                     const src = (img.getAttribute('src') || '').trim();
@@ -6670,7 +6763,8 @@ class NewsletterEditor {
                 '.add-more-btn',
                 '.image-toolbar',
                 '.resize-handle',
-                '.rotation-handle'
+                '.rotation-handle',
+                '.video-toolbar-handle'
             ];
             
             elementsToRemove.forEach(selector => {
@@ -6716,7 +6810,83 @@ class NewsletterEditor {
             tempDiv.querySelectorAll('[data-placeholder]').forEach(el => {
                 el.removeAttribute('data-placeholder');
             });
-            
+
+            // Normalize and harden embedded video iframes for final output (hide player UI/tool icons)
+            try {
+                const iframes = Array.from(tempDiv.querySelectorAll('iframe[src]'));
+                for (const ifr of iframes) {
+                    const raw = (ifr.getAttribute('src') || '').trim();
+                    if (!raw) continue;
+                    // Helper to safely build URLs and merge params
+                    const mergeParams = (urlStr, paramObj) => {
+                        try {
+                            const u = new URL(urlStr, window.location.href);
+                            Object.entries(paramObj).forEach(([k, v]) => u.searchParams.set(k, String(v)));
+                            return u.toString();
+                        } catch (_) { return urlStr; }
+                    };
+                    // YouTube handling (including youtu.be short links)
+                    if (/youtu\.be|youtube\.com/i.test(raw)) {
+                        let src = raw;
+                        try {
+                            const u = new URL(raw, window.location.href);
+                            // If it's a watch URL or short URL, convert to embed
+                            let videoId = '';
+                            if (/youtu\.be/i.test(u.hostname)) {
+                                videoId = (u.pathname || '').split('/').filter(Boolean)[0] || '';
+                            } else if (/youtube\.com/i.test(u.hostname)) {
+                                if ((u.pathname || '').startsWith('/watch')) {
+                                    videoId = u.searchParams.get('v') || '';
+                                } else if ((u.pathname || '').startsWith('/embed/')) {
+                                    videoId = (u.pathname || '').split('/').pop() || '';
+                                }
+                            }
+                            if (videoId) {
+                                src = `https://www.youtube-nocookie.com/embed/${videoId}`;
+                            }
+                        } catch(_) { /* keep original src if parsing fails */ }
+                        const ytParams = {
+                            rel: 0,
+                            modestbranding: 1,
+                            controls: 0,
+                            iv_load_policy: 3,
+                            fs: 0,
+                            disablekb: 1,
+                            playsinline: 1
+                        };
+                        const final = mergeParams(src, ytParams);
+                        ifr.setAttribute('src', final);
+                        // Ensure no border/fullscreen ui hooks
+                        ifr.removeAttribute('allowfullscreen');
+                        ifr.setAttribute('frameborder', '0');
+                        continue;
+                    }
+                    // Vimeo handling
+                    if (/vimeo\.com/i.test(raw)) {
+                        const final = mergeParams(raw, {
+                            title: 0,
+                            byline: 0,
+                            portrait: 0,
+                            badge: 0,
+                            controls: 0
+                        });
+                        ifr.setAttribute('src', final);
+                        ifr.setAttribute('frameborder', '0');
+                        continue;
+                    }
+                    // Dailymotion handling
+                    if (/dailymotion\.com/i.test(raw)) {
+                        const final = mergeParams(raw, {
+                            'ui-logo': 0,
+                            controls: 0
+                        });
+                        ifr.setAttribute('src', final);
+                        ifr.setAttribute('frameborder', '0');
+                        continue;
+                    }
+                }
+            } catch (_) { /* best-effort: do not block save */ }
+
             try {
                 const MAX_IMG_WIDTH = 800;
                 const JPEG_QUALITY = 0.85;

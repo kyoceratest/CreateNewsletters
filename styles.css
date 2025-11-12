@@ -1831,11 +1831,17 @@ body:not(.newsletter-editor) .image-toolbar,
 body:not(.newsletter-editor) .section-toolbar,
 body:not(.newsletter-editor) .table-toolbar,
 body:not(.newsletter-editor) .video-toolbar,
+body:not(.newsletter-editor) .video-toolbar-handle,
 body:not(.newsletter-editor) .resize-handle,
 body:not(.newsletter-editor) .rotation-handle,
 body:not(.newsletter-editor) .image-delete-btn,
 body:not(.newsletter-editor) .gallery-upload {
     display: none !important;
+}
+
+/* Prevent embedded player UI (e.g., YouTube overflow menu) from showing on hover in preview/output */
+body:not(.newsletter-editor) .video-align-wrapper iframe {
+  pointer-events: none !important;
 }
 
 /* Disable ALL editing capabilities in final output */
