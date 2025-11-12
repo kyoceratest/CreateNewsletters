@@ -3903,6 +3903,13 @@ class NewsletterEditor {
         
         // Update handle positions after wrapper is set up
         this.updateResizeHandlePositions();
+
+        // If currently in absolute positioning, ensure dragging is wired after any re-wrapping
+        try {
+            if (wrapper.classList && wrapper.classList.contains('position-absolute')) {
+                this.makeImageDraggable(wrapper);
+            }
+        } catch (_) {}
     }
     
     updateResizeHandlePositions() {
@@ -4288,8 +4295,11 @@ class NewsletterEditor {
             // Store the initial position
             startX = e.clientX;
             startY = e.clientY;
-            startLeft = parseInt(wrapper.style.left);
-            startTop = parseInt(wrapper.style.top);
+            const parsedLeft = parseInt(wrapper.style.left);
+            const parsedTop = parseInt(wrapper.style.top);
+            // Fallback to current offsets if styles are not set
+            startLeft = Number.isFinite(parsedLeft) ? parsedLeft : (wrapper.offsetLeft || 0);
+            startTop = Number.isFinite(parsedTop) ? parsedTop : (wrapper.offsetTop || 0);
             e.preventDefault();
             e.stopPropagation();
         };
@@ -4319,8 +4329,10 @@ class NewsletterEditor {
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
             
-            wrapper.style.left = (startLeft + dx) + 'px';
-            wrapper.style.top = (startTop + dy) + 'px';
+            const baseLeft = Number.isFinite(startLeft) ? startLeft : (wrapper.offsetLeft || 0);
+            const baseTop = Number.isFinite(startTop) ? startTop : (wrapper.offsetTop || 0);
+            wrapper.style.left = (baseLeft + dx) + 'px';
+            wrapper.style.top = (baseTop + dy) + 'px';
             
             this.saveState();
             this.lastAction = 'Image déplacée';
@@ -4339,8 +4351,10 @@ class NewsletterEditor {
                 // Store the initial position
                 startX = e.clientX;
                 startY = e.clientY;
-                startLeft = parseInt(wrapper.style.left);
-                startTop = parseInt(wrapper.style.top);
+                const parsedLeft2 = parseInt(wrapper.style.left);
+                const parsedTop2 = parseInt(wrapper.style.top);
+                startLeft = Number.isFinite(parsedLeft2) ? parsedLeft2 : (wrapper.offsetLeft || 0);
+                startTop = Number.isFinite(parsedTop2) ? parsedTop2 : (wrapper.offsetTop || 0);
                 
                 // Add a class to indicate dragging
                 wrapper.classList.add('dragging');
@@ -4944,6 +4958,9 @@ class NewsletterEditor {
             
             // Apply the cropped image to the current image
             this.currentEditingImage.src = croppedImageDataUrl;
+            try { this.currentEditingImage.dataset.originalSrc = croppedImageDataUrl; } catch (_) {}
+            // Reattach wrapper/handles to ensure further edits (move/resize/crop) work
+            try { this.addResizeHandlesToImage(this.currentEditingImage); } catch (_) {}
             
             // Clean up
             this.cancelImageCropping();
