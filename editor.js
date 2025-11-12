@@ -3817,8 +3817,12 @@ class NewsletterEditor {
                     wrapper.style.cssText = 'position: relative; display: inline-block; margin: 10px 0;';
                 }
             }
-            image.parentNode.insertBefore(wrapper, image);
-            wrapper.appendChild(image);
+            if (image.parentNode) {
+                image.parentNode.insertBefore(wrapper, image);
+                wrapper.appendChild(image);
+            } else {
+                return; // image must be in DOM to add handles safely
+            }
         } else {
             // If wrapper exists and image is inside gallery, ensure natural flow so container height follows image
             if (isInGallery) {
@@ -4092,8 +4096,18 @@ class NewsletterEditor {
             // If no wrapper exists, the image might be directly in the content
             wrapper = document.createElement('div');
             wrapper.className = 'image-wrapper';
-            this.currentEditingImage.parentNode.insertBefore(wrapper, this.currentEditingImage);
-            wrapper.appendChild(this.currentEditingImage);
+            if (this.currentEditingImage.parentNode) {
+                this.currentEditingImage.parentNode.insertBefore(wrapper, this.currentEditingImage);
+                wrapper.appendChild(this.currentEditingImage);
+            } else {
+                const host = document.getElementById('editableContent') || document.body;
+                if (host) {
+                    host.appendChild(wrapper);
+                    wrapper.appendChild(this.currentEditingImage);
+                } else {
+                    return; // no valid host
+                }
+            }
         }
         
         // Remove any existing position classes
