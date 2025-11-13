@@ -1,3 +1,6 @@
 *.mp4
 /doc/formation
 rules/repo.md
+Image/resize_report.csv
+batch_resize.php
+upload_resize.php

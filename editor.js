@@ -728,6 +728,209 @@ class NewsletterEditor {
             console.error('insertImageBtn not found');
         }
 
+        // New unified resize menu
+        const resizeMainBtn = document.getElementById('resizeMainBtn');
+        if (resizeMainBtn) {
+            resizeMainBtn.addEventListener('click', () => {
+                const opts = document.getElementById('resizeOptions');
+                if (opts) opts.style.display = opts.style.display === 'none' ? 'block' : 'none';
+            });
+        }
+
+        // Resize image (server-side) button
+        const resizeImageBtn = document.getElementById('resizeImageBtn');
+        if (resizeImageBtn) {
+            resizeImageBtn.addEventListener('click', () => {
+                try {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'image/*';
+                    input.onchange = async (e) => {
+                        const file = e.target.files && e.target.files[0];
+                        if (!file) return;
+                        const desired = prompt('Nom du fichier (sans extension):');
+                        if (desired === null) return;
+                        const fd = new FormData();
+                        fd.append('image', file);
+                        fd.append('filename', desired);
+                        try {
+                            const resp = await fetch('upload_resize.php', { method: 'POST', body: fd });
+                            const data = await resp.json();
+                            if (data && data.success) {
+                                alert('Image enregistrée: ' + data.url);
+                            } else {
+                                alert('Erreur: ' + (data && data.error ? data.error : 'inconnue'));
+                            }
+                        } catch (err) {
+                            alert('Erreur réseau lors du redimensionnement. Assurez-vous d\'ouvrir la page via un serveur PHP (ex: http://localhost/...) et non via un serveur statique.');
+                        }
+                    };
+                    input.click();
+                } catch (_) {}
+            });
+        }
+
+        // Batch resize (server-side) button
+        const batchResizeBtn = document.getElementById('batchResizeBtn');
+        if (batchResizeBtn) {
+            batchResizeBtn.addEventListener('click', async () => {
+                // Prefer local folder processing when available
+                if (window.showDirectoryPicker && confirm('Utiliser le dossier local (sans serveur) pour redimensionner ?')) {
+                    try {
+                        await localBatchResizeFolders();
+                    } catch (err) {
+                        alert('Erreur lors du traitement local: ' + (err && err.message ? err.message : String(err)));
+                    }
+                    return;
+                }
+
+                // Fallback to server endpoint
+                if (!confirm('Redimensionner via le serveur toutes les images du dossier Image/ vers subImage/?')) return;
+                try {
+                    const resp = await fetch('batch_resize.php', { method: 'POST' });
+                    const data = await resp.json();
+                    if (data && data.success) {
+                        const msg = `Traitement terminé\nTotal: ${data.total}\nRedimensionnées: ${data.resized}\nIgnorées: ${data.skipped}\nErreurs: ${data.errors?.length || 0}`;
+                        alert(msg);
+                    } else {
+                        alert('Erreur: ' + (data && data.error ? data.error : 'inconnue'));
+                    }
+                } catch (e) {
+                    alert('Erreur réseau. Ouvrez la page via un serveur PHP (ex: http://localhost/...).');
+                }
+            });
+        }
+        const resizeFolderUnderInsertBtn = document.getElementById('resizeFolderUnderInsertBtn');
+        if (resizeFolderUnderInsertBtn) {
+            resizeFolderUnderInsertBtn.addEventListener('click', async () => {
+                try {
+                    if (window.showDirectoryPicker && confirm('Utiliser le dossier local (sans serveur) pour redimensionner ?')) {
+                        try { await localBatchResizeFolders(); } catch (err) {
+                            alert('Erreur lors du traitement local: ' + (err && err.message ? err.message : String(err)));
+                        }
+                        try { document.getElementById('imageOptions').style.display = 'none'; } catch (_) {}
+                        return;
+                    }
+                    if (!confirm('Redimensionner via le serveur toutes les images du dossier Image/ vers subImage/?')) return;
+                    try {
+                        const resp = await fetch('batch_resize.php', { method: 'POST' });
+                        const data = await resp.json();
+                        if (data && data.success) {
+                            const msg = `Traitement terminé\nTotal: ${data.total}\nRedimensionnées: ${data.resized}\nIgnorées: ${data.skipped}\nErreurs: ${data.errors?.length || 0}`;
+                            alert(msg);
+                        } else {
+                            alert('Erreur: ' + (data && data.error ? data.error : 'inconnue'));
+                        }
+                    } catch (e) {
+                        alert('Erreur réseau. Ouvrez la page via un serveur PHP (ex: http://localhost/...).');
+                    }
+                } finally {
+                    try { document.getElementById('imageOptions').style.display = 'none'; } catch (_) {}
+                }
+            });
+        }
+
+        // Local folder batch resize using File System Access API
+        async function localBatchResizeFolders() {
+            if (!window.showDirectoryPicker) throw new Error('File System Access API non supportée par ce navigateur');
+
+            const srcHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+            try { await srcHandle.requestPermission({ mode: 'readwrite' }); } catch (_) {}
+            const dstHandle = srcHandle;
+
+            const maxW = 1600, maxH = 1600;
+            let total = 0, resized = 0, skipped = 0, errors = 0;
+            let origBytes = 0, newBytes = 0;
+            const reportRows = [['path','original_bytes','new_bytes','saved_bytes','saved_percent']];
+
+            async function ensureSubdir(baseHandle, pathParts) {
+                let cur = baseHandle;
+                for (const part of pathParts) {
+                    try {
+                        cur = await cur.getDirectoryHandle(part, { create: true });
+                    } catch (_) {
+                        cur = await cur.getDirectoryHandle(part, { create: true });
+                    }
+                }
+                return cur;
+            }
+
+            async function processFile(fileHandle, relParts) {
+                const file = await fileHandle.getFile();
+                if (!file.type || !file.type.startsWith('image/')) return; // ignore non-images
+                total++;
+                try {
+                    const { blob: outBlob, changed, name } = await resizeImageFile(file, maxW, maxH);
+                    const parent = await ensureSubdir(dstHandle, relParts);
+                    const outHandle = await parent.getFileHandle(name, { create: true });
+                    const writable = await outHandle.createWritable();
+                    await writable.write(outBlob);
+                    await writable.close();
+                    const o = file.size || 0;
+                    const n = outBlob.size || 0;
+                    origBytes += o;
+                    newBytes += n;
+                    const saved = Math.max(0, o - n);
+                    const pct = o > 0 ? Math.round((saved / o) * 100) : 0;
+                    const relPath = (relParts.length ? relParts.join('/') + '/' : '') + name;
+                    reportRows.push([relPath, String(o), String(n), String(saved), String(pct)]);
+                    if (changed) resized++; else skipped++;
+                } catch (_) {
+                    errors++;
+                }
+            }
+
+            async function walk(dirHandle, relParts = []) {
+                for await (const entry of dirHandle.values()) {
+                    if (entry.kind === 'directory') {
+                        await walk(entry, relParts.concat([entry.name]));
+                    } else if (entry.kind === 'file') {
+                        await processFile(entry, relParts);
+                    }
+                }
+            }
+
+            await walk(srcHandle, []);
+
+            // Write CSV report at destination root
+            try {
+                const csv = reportRows.map(r => r.map(v => /[",\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v).join(',')).join('\n');
+                const reportHandle = await dstHandle.getFileHandle('resize_report.csv', { create: true });
+                const writable = await reportHandle.createWritable();
+                await writable.write(new Blob([csv], { type: 'text/csv' }));
+                await writable.close();
+            } catch (_) {}
+
+            const savedBytes = Math.max(0, origBytes - newBytes);
+            const savedKB = Math.round(savedBytes / 102.4) / 10; // 1 decimal
+            const newKB = Math.round(newBytes / 102.4) / 10;
+            const origKB = Math.round(origBytes / 102.4) / 10;
+            const pctTotal = origBytes > 0 ? Math.round((savedBytes / origBytes) * 100) : 0;
+            alert(`Traitement local terminé\nTotal: ${total}\nRedimensionnées: ${resized}\nIgnorées: ${skipped}\nErreurs: ${errors}\n\nTaille totale avant: ${origKB} KB\nTaille totale après: ${newKB} KB\nGain: ${savedKB} KB (${pctTotal}%)\n\nRapport: resize_report.csv dans le dossier de destination`);
+        }
+
+        async function resizeImageFile(file, maxW, maxH) {
+            const img = await createImageBitmap(file);
+            let w = img.width, h = img.height;
+            const ratio = Math.min(maxW / w, maxH / h, 1);
+            const changed = ratio < 1;
+            const targetW = Math.round(w * ratio);
+            const targetH = Math.round(h * ratio);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = targetW; canvas.height = targetH;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, targetW, targetH);
+
+            const type = file.type || 'image/jpeg';
+            const quality = type === 'image/jpeg' || type === 'image/webp' ? 0.82 : undefined;
+            const blob = await new Promise((res) => canvas.toBlob((b) => res(b || file), type, quality));
+
+            // Keep original name and extension
+            const name = file.name;
+            return { blob, changed, name };
+        }
+
         // Local image button
         document.getElementById('localImageBtn').addEventListener('click', () => {
             // Persist current caret range so insertion follows the caret after file dialog
