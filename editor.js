@@ -6691,10 +6691,19 @@ class NewsletterEditor {
             
             // Get the content from the editor
             let content = editableContent.innerHTML;
-            // Get the title from the HTML page's title element or use a default name
-            const pageTitle = document.title.trim() || 
-                             document.querySelector('h1, h2, h3')?.textContent.trim() || 
-                             'newsletter_sans_titre';
+            let pageTitle = '';
+            try {
+                // Prefer any element with inline style 52px (tolerate missing space)
+                const px52El = editableContent.querySelector('*[style*="font-size: 52px"], *[style*="font-size:52px"]');
+                if (px52El) {
+                    const t = (px52El.innerText || px52El.textContent || '').trim();
+                    if (t) pageTitle = t;
+                }
+            } catch (_) { /* no-op */ }
+            if (!pageTitle) {
+                pageTitle = document.title.trim() ||
+                            (document.querySelector('h1, h2, h3')?.textContent.trim() || 'newsletter_sans_titre');
+            }
             const fileName = pageTitle.replace(/[\\/:*?"<>|]/g, '_'); // Remove invalid filename characters
             
             // Create a temporary div to clean up the content
