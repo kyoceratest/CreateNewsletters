@@ -3873,6 +3873,27 @@ body:not(.accueil-page) .main-content .content-wrapper .content-area {
 
 .content-area .button:hover,
 .kyo-btn:hover { background: var(--kyo-red-dark); }
+/* Uniform size and colors for category buttons (same as Newsletter/styles.css) */
+#categoryBar .kyo-btn {
+  min-width: 160px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  background: #4ac5e5 !important; /* default color */
+  color: #fff !important;
+  border-color: #7e7e7e !important; /* requested border color */
+  font-weight: 700;
+}
+
+/* Hover/active colors */
+#categoryBar .kyo-btn:hover,
+#categoryBar .kyo-btn.active {
+  background: #0a9bcd !important;
+  border-color: #0a9bcd !important;
+  color: #fff !important;
+}
 
 /* Small meta text */
 .content-area .meta { color: var(--kyo-muted); font-size: .9rem; }

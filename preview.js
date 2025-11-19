@@ -2,6 +2,52 @@
 // Extracted from preview.html to keep JS separate without changing UI/behavior.
 // On-screen text remains French; code and comments are in English.
 
+function buildCategoryBarElement() {
+  const bar = document.createElement('div');
+  bar.id = 'categoryBar';
+  bar.style.display = 'flex';
+  bar.style.flexWrap = 'wrap';
+  bar.style.gap = '8px';
+  bar.style.marginTop = '12px';
+
+  const config = [
+    { cat: 'edito', label: 'Édito' },
+    { cat: 'com_actus', label: 'Com & Actus' },
+    { cat: 'animation', label: 'Animation' },
+    { cat: 'zoom_materiel', label: 'Zoom Matériel' },
+    { cat: 'solutions_insights', label: 'Solutions & Insights' },
+    { cat: 'outils_astuces', label: 'Outils & Astuces' },
+    { cat: 'branding', label: 'Branding' },
+    { cat: 'formations', label: 'Formations' }
+  ];
+
+  config.forEach(item => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'kyo-btn';
+    btn.dataset.cat = item.cat;
+    btn.textContent = item.label;
+    btn.style.padding = '8px 12px';
+    btn.style.border = '1px solid #ccc';
+    btn.style.borderRadius = '6px';
+    btn.style.background = '#fff';
+    btn.style.cursor = 'pointer';
+    bar.appendChild(btn);
+  });
+
+  return bar;
+}
+
+function ensureCategoryBarBeforeTarget(target) {
+  if (!target || !target.parentNode) return null;
+  const parent = target.parentNode;
+  const existing = parent.querySelector('#categoryBar');
+  if (existing && existing.parentNode === parent) return existing;
+  const bar = buildCategoryBarElement();
+  parent.insertBefore(bar, target);
+  return bar;
+}
+
 // 1) Preview Content Handler: receives postMessage from history modal
 function handlePreviewContent(data) {
   const { content, title } = data || {};
@@ -26,6 +72,7 @@ function handlePreviewContent(data) {
         });
       });
     } catch (_) {}
+    ensureCategoryBarBeforeTarget(target);
     target.innerHTML = '';
     while (wrapper.firstChild) target.appendChild(wrapper.firstChild);
     if (title) { try { document.title = title + ' - Aperçu'; } catch (_) {} }
@@ -162,7 +209,7 @@ async function loadHistoryPreviewById(historyId) {
       });
     });
   } catch (_) {}
-
+  ensureCategoryBarBeforeTarget(target);
   target.innerHTML = '';
   while (wrapper.firstChild) target.appendChild(wrapper.firstChild);
   try { if (item.name) document.title = item.name + ' - Aperçu'; } catch (_) {}

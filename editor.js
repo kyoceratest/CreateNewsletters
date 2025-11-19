@@ -285,7 +285,7 @@ class NewsletterEditor {
             console.error('Preview failed:', e);
         }
     }
-    // Full-page preview with site header/footer and styles.css
+    // Full-page preview reusing preview.html (header/footer, category bar, styles)
     previewFull() {
         try {
             const editableContent = document.getElementById('editableContent');
@@ -330,137 +330,29 @@ class NewsletterEditor {
 
             const pageTitle = (document.querySelector('h1, h2, h3')?.textContent || document.title || 'Aperçu').trim();
 
-            const headerHTML = `
-<header class="kyocera-header">
-  <div class="header-top desktop-header">
-    <div class="header-logo">
-      <a href="https://www.kyoceradocumentsolutions.fr/fr.html">
-        <img src="Image/header_footer/logo.png" />
-      </a>
-      <span class="header-logo-text">KYOCERA Document Solutions</span>
-    </div>
-    <div class="header-lang-account">
-      <a href="https://www.kyoceradocumentsolutions.fr/fr/about-us/contact-us/kyocera-worldwide.html" class="lang-text">
-        <img src="Image/header_footer/fr.svg" alt="France" class="flag-icon" />
-        FR France
-      </a>
-      <a href="https://mykyocera.kyoceradocumentsolutions.fr/fr.html" class="account-text">My Kyocera</a>
-    </div>
-  </div>
-  <div class="mobile-header">
-    <div class="mobile-header-top">
-      <div class="header-logo">
-        <a href="https://www.kyoceradocumentsolutions.fr/fr.html">
-          <img src="Image/header_footer/logo.png" />
-        </a>
-        <span class="header-logo-text">KYOCERA Document Solutions</span>
-      </div>
-    </div>
-    <div class="mobile-header-bottom">
-      <a href="https://www.kyoceradocumentsolutions.fr/fr/about-us/contact-us/kyocera-worldwide.html" class="mobile-lang-text">
-        <i class="fas fa-globe"></i>
-        FR / France
-      </a>
-      <div class="mobile-icons-group">
-        <a href="https://mykyocera.kyoceradocumentsolutions.fr/fr.html">
-          <img src="Image/header_footer/mykyocer.svg" alt="My Kyocera" class="mobile-user-icon" />
-        </a>
-        <button class="hamburger mobile-hamburger" id="hamburger"><span></span><span></span><span></span></button>
-      </div>
-    </div>
-  </div>
-  <nav class="header-nav" id="headerNav">
-    <ul class="nav-menu">
-      <li><a href="https://www.kyoceradocumentsolutions.fr/fr/smarter-workspaces.html">Espaces de travail intelligents</a></li>
-      <li><a href="https://www.kyoceradocumentsolutions.fr/fr/content-services.html">Business Solutions</a></li>
-      <li><a href="https://www.kyoceradocumentsolutions.fr/fr/products.html">Produits</a></li>
-      <li><a href="https://www.kyoceradocumentsolutions.fr/fr/support.html">Support</a></li>
-      <li><a href="https://www.kyoceradocumentsolutions.fr/fr/about-us.html">Qui sommes-nous</a></li>
-    </ul>
-  </nav>
-</header>`;
+            const previewWindow = window.open('preview.html', 'previewWindowFromEditor');
+            if (!previewWindow) return;
 
-            const footerHTML = `
-<footer class="kyocera-footer">
-  <div class="footer-content">
-    <div class="footer-main desktop-footer">
-      <div class="footer-row footer-row-1">
-        <div class="footer-social-icons">
-          <a href="https://www.facebook.com/KyoceraDocumentSolutionsFrance/"><img src="Image/header_footer/facebook.png" alt="Facebook" /></a>
-          <a href="https://www.linkedin.com/company/kyocera-document-solutions-france/posts/?feedView=all"><img src="Image/header_footer/linkin.png" alt="LinkedIn" /></a>
-          <a href="https://www.youtube.com/user/kdfrsas"><img src="Image/header_footer/video.png" alt="YouTube" /></a>
-        </div>
-      </div>
-      <div class="footer-row footer-row-2">
-        <div class="footer-left">
-          <div class="footer-links">
-            <a href="https://www.kyoceradocumentsolutions.fr/fr/about-us/contact-us.html">Nous contacter</a>
-            <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/privacy-and-cookie-centre.html">Utilisation des cookies</a>
-            <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/data-request.html">Politique de gestion des données personnelles</a>
-          </div>
-        </div>
-        <div class="footer-right">
-          <div class="footer-copyright">©2025 KYOCERA Document Solutions France S.A.S.</div>
-        </div>
-      </div>
-      <div class="footer-row footer-row-3">
-        <div class="footer-left">
-          <div class="footer-links">
-            <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/terms-of-use.html">Conditions d'utilisation et restrictions légales</a>
-            <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/legal-notices.html">Conditions Générales de Vente</a>
-            <a href="https://www.kyoceradocumentsolutions.fr/fr/gdpr-preferences.html">Gérer vos cookies</a>
-            <a href="https://www.kyoceradocumentsolutions.fr/fr/about-us/contact-us/press.html">Presse</a>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="footer-main mobile-footer">
-      <div class="mobile-footer-social">
-        <a href="https://www.facebook.com/kyoceradocumentsolutions"><img src="Image/header_footer/facebook.png" alt="Facebook" /></a>
-        <a href="https://www.linkedin.com/company/kyocera-document-solutions"><img src="Image/header_footer/linkin.png" alt="LinkedIn" /></a>
-        <a href="https://www.youtube.com/user/kyoceradocumentsolutions"><img src="Image/header_footer/video.png" alt="YouTube" /></a>
-      </div>
-      <div class="mobile-footer-links">
-        <a href="https://www.kyoceradocumentsolutions.fr/fr/about-us/contact-us.html">Nous contacter</a>
-        <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/privacy-and-cookie-centre.html">Utilisation des cookies</a>
-        <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/data-request.html">Politique de gestion des données personnelles</a>
-        <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/terms-of-use.html">Conditions d'utilisation et restrictions légales</a>
-        <a href="https://www.kyoceradocumentsolutions.fr/fr/footer/legal-notices.html">Conditions Générales de Vente</a>
-        <a href="https://www.kyoceradocumentsolutions.fr/fr/gdpr-preferences.html">Gérer vos cookies</a>
-        <a href="https://www.kyoceradocumentsolutions.fr/fr/about-us/contact-us/press.html">Presse</a>
-      </div>
-      <div class="mobile-footer-copyright">©2025 KYOCERA Document Solutions France S.A.S.</div>
-    </div>
-  </div>
-</footer>`;
+            const payload = {
+                type: 'previewContent',
+                content: tempDiv.innerHTML,
+                title: pageTitle
+            };
 
-            const mainHTML = `<main class="main-content"><div class="content-wrapper"><div class="content-area">${tempDiv.innerHTML}</div></div></main>`;
-
-            const fullHTML = `<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="robots" content="noindex,nofollow,noarchive,noimageindex">
-  <title>${pageTitle}</title>
-  <link rel="stylesheet" href="styles.css?v=20250922-1" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
-  <link rel="icon" type="image/png" href="Image/header_footer/logo.png"/>
-  <style> *{user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none} [contenteditable]{pointer-events:none} :focus{outline:none!important} </style>
-</head>
-<body>
-  ${headerHTML}
-  ${mainHTML}
-  ${footerHTML}
-</body>
-</html>`;
-
-            const w = window.open('about:blank', '_blank');
-            if (w && w.document) {
-                w.document.open();
-                w.document.write(fullHTML);
-                w.document.close();
-            }
+            const interval = setInterval(() => {
+                try {
+                    if (!previewWindow || previewWindow.closed) {
+                        clearInterval(interval);
+                        return;
+                    }
+                    if (previewWindow.document && previewWindow.document.readyState === 'complete') {
+                        clearInterval(interval);
+                        previewWindow.postMessage(payload, '*');
+                    }
+                } catch (_) {
+                    // Cross-origin or timing issue; keep trying until window is ready or closed
+                }
+            }, 100);
         } catch (e) {
             console.error('Preview (full) failed:', e);
         }
