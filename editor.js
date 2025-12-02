@@ -1852,6 +1852,49 @@ class NewsletterEditor {
             } catch (_) { return false; }
         };
 
+        // Helper to unlock special title classes (e.g., imported .sujette-title)
+        // and clear inline 52px / 22px font sizes inside the current context
+        // when changing font-size away from the predefined 52px / 22px titles.
+        const unlockTitleClassesOnPath = (startNode) => {
+            try {
+                const root = getEditableRoot();
+                if (!root || !startNode) return;
+                let node = startNode.nodeType === Node.TEXT_NODE ? startNode.parentElement : startNode;
+                while (node && node !== root) {
+                    if (node.classList && node.classList.contains('sujette-title')) {
+                        node.classList.remove('sujette-title');
+                    }
+                    node = node.parentElement;
+                }
+            } catch (_) { /* no-op */ }
+        };
+
+        const clearInlineTitleSizesInRange = (range) => {
+            try {
+                const root = getEditableRoot();
+                if (!root || !range) return;
+                const walker = document.createTreeWalker(
+                    root,
+                    NodeFilter.SHOW_ELEMENT,
+                    {
+                        acceptNode(node) {
+                            if (!range.intersectsNode(node)) return NodeFilter.FILTER_REJECT;
+                            const s = node.style && node.style.fontSize;
+                            if (s === '52px' || s === '22px') return NodeFilter.FILTER_ACCEPT;
+                            return NodeFilter.FILTER_SKIP;
+                        }
+                    }
+                );
+                const toClear = [];
+                while (walker.nextNode()) {
+                    toClear.push(walker.currentNode);
+                }
+                toClear.forEach(node => {
+                    try { node.style.fontSize = ''; } catch (_) {}
+                });
+            } catch (_) { /* no-op */ }
+        };
+
         // Font size handlers — apply on both change and click (when value may not change)
         let fontSizeAppliedRecently = false; // guard to avoid double-apply
         const applyFontSize = (fontSize) => {
@@ -1863,18 +1906,31 @@ class NewsletterEditor {
             if (!selection || selection.rangeCount === 0) return;
             const range = selection.getRangeAt(0);
 
+            // If we are changing to a size other than 52 (Titre_P) or 22 (Sous_titre_P),
+            // unlock any imported title classes on the path and clear existing
+            // inline 52px / 22px sizes inside the selection so the new size can
+            // take visual precedence.
+            if (fontSize !== '52' && fontSize !== '22') {
+                unlockTitleClassesOnPath(range.commonAncestorContainer);
+                clearInlineTitleSizesInRange(range);
+            }
+
             // Enforce uniqueness for 52 (Titre_P) and 22 (Sous_titre_P)
+            // Soft rule: warn the user, but allow override via confirmation.
             if (fontSize === '52' || fontSize === '22') {
                 const px = fontSize + 'px';
                 const existsCount = countInlineFontSize(px);
                 const alreadyInside = selectionWithinInlineFontSize(px);
                 if (existsCount >= 1 && !alreadyInside) {
-                    const msg = fontSize === '52'
+                    const baseMsg = fontSize === '52'
                         ? "Titre_P ne peut être utilisé qu'une seule fois dans ce document."
                         : "Sous_titre_P ne peut être utilisé qu'une seule fois dans ce document.";
-                    alert(msg);
-                    try { document.getElementById('fontSize').value = ''; } catch (_) {}
-                    return; // do not apply a second instance
+                    const proceed = window.confirm(baseMsg + "\n\nCliquez sur OK pour l'appliquer quand même, ou sur Annuler pour choisir une autre taille.");
+                    if (!proceed) {
+                        try { document.getElementById('fontSize').value = ''; } catch (_) {}
+                        fontSizeAppliedRecently = false;
+                        return; // user chose to respect the single-use rule
+                    }
                 }
             }
 
@@ -6894,8 +6950,10 @@ class NewsletterEditor {
                 imageSummaryText = `${__resized} image(s) redimensionnée(s), ${__unchanged} inchangée(s), ${__skippedCors} ignorée(s) (CORS)`;
             } catch (_) { /* ignore */ }
             
-            // Get the cleaned content
-            const cleanedContent = tempDiv.innerHTML;
+            // Get the cleaned content and strip editor-only UI (e.g. video toolbar handles)
+            const cleanedContent = (typeof sanitizeFullHtmlForHistory === 'function')
+                ? sanitizeFullHtmlForHistory(tempDiv.innerHTML)
+                : tempDiv.innerHTML;
             
             // Indicate manual save as the last action
             this.lastAction = 'Sauvegarde manuelle';
@@ -7594,6 +7652,23 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- IndexedDB helpers for full snapshot HTML (preserves media src) ---
+
+// Sanitize HTML before storing full snapshots for preview/live use.
+// This removes editor-only UI elements (e.g. video toolbar handles)
+// from the stored HTML without touching the live editor DOM.
+function sanitizeFullHtmlForHistory(html) {
+    try {
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = String(html || '');
+        wrapper.querySelectorAll('.video-toolbar-handle').forEach(el => {
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+        });
+        return wrapper.innerHTML;
+    } catch (_) {
+        return String(html || '');
+    }
+}
+
 function openHistoryDB() {
     return new Promise((resolve, reject) => {
         try {
@@ -7614,7 +7689,8 @@ function saveFullContentToIDB(id, html) {
     openHistoryDB()
         .then(db => {
             const tx = db.transaction('historyFull', 'readwrite');
-            tx.objectStore('historyFull').put({ id: String(id), content: String(html || '') });
+            const cleanHtml = sanitizeFullHtmlForHistory(html);
+            tx.objectStore('historyFull').put({ id: String(id), content: String(cleanHtml || '') });
             tx.oncomplete = () => { try { db.close(); } catch (_) {} };
             tx.onerror = () => { try { db.close(); } catch (_) {} };
         })
